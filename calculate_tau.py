@@ -88,7 +88,7 @@ def project_los_velocity(vel, s, nx, ny, nz, z1=0):
         + vel[..., 2] * nz[:, :, None]
     )
 
-def calculate_tau_edges(s, z0, x1=None, x2=None, y1=None, y2=None):
+def calculate_tau_edges(s, z0, dir_path, x1=None, x2=None, y1=None, y2=None):
     # Extract necessary data and parameters from the HDF5 file
     header = dict(s['Header'].attrs)
     h = header['HubbleParam']
@@ -169,7 +169,7 @@ def calculate_tau_edges(s, z0, x1=None, x2=None, y1=None, y2=None):
                 2 * a * k0 / (np.sqrt(np.pi) * Ks) * (dawsn(x - Ks*dls) - dawsn(x)))
         taus[:,:,i] = np.sum(dtau, axis=2) # Integrated damping wing optical depth
     # Create file
-    with h5py.File(f'tau_maps/tau_map_{z0}.hdf5', 'w') as f:
+    with h5py.File(os.path.join(dir_path, f'tau_map_{z0}.hdf5'), 'w') as f:
         f.attrs['HubbleParam'] = h
         f.attrs['NumFreq'] = np.int32(n_freq)
         f.attrs['Dv_min'] = Dv_min_kms
@@ -183,7 +183,7 @@ def calculate_tau_edges(s, z0, x1=None, x2=None, y1=None, y2=None):
         f.create_dataset('Dvs', data=Dvs)
     return Dvs, taus
 
-def calculate_tau_chunk(s, z0, chunk=0):
+def calculate_tau_chunk(s, z0, dir_path, chunk=0):
     header = dict(s['Header'].attrs)
     # Determine chunk boundaries
     n = h['NumPixels']
@@ -270,7 +270,7 @@ def calculate_tau_chunk(s, z0, chunk=0):
                 2 * a * k0 / (np.sqrt(np.pi) * Ks) * (dawsn(x - Ks*dls) - dawsn(x)))
         taus[:,:,i] = np.sum(dtau, axis=2) # Integrated damping wing optical depth
     # Create file
-    with h5py.File(f'tau_maps/tau_map_{z0}.hdf5', 'w') as f:
+    with h5py.File(os.path.join(dir_path, f'tau_map_{z0}.hdf5'), 'w') as f:
         f.attrs['HubbleParam'] = h
         f.attrs['NumFreq'] = np.int32(n_freq)
         f.attrs['Dv_min'] = Dv_min_kms
@@ -299,6 +299,11 @@ def parse_args():
         help="Path to a text file with one source z0 per line."
     )
     parser.add_argument(
+        "--save_dir",
+        type=str,
+        help="Directory in which to store tau_maps"
+    )
+    parser.add_argument(
         "--x1", type=int, default=None,
         help="Start index along x-axis (pixel slice). Default: None (full range)."
     )
@@ -323,10 +328,14 @@ def main():
     if not os.path.exists(args.hdf5_file):
         print(f"Error: HDF5 file not found: {args.hdf5_file}", file=sys.stderr)
         sys.exit(1)
-
-    if os.path.exists("tau_maps"):
-        shutil.rmtree("tau_maps")
-    os.makedirs("tau_maps")
+    
+    dir_path = "tau_maps"
+    save_dir_arg = args.save_dir
+    if save_dir_arg is not None:
+        dir_path = os.path.join(save_dir_arg, dir_path)
+    if os.path.exists(dir_path):
+        shutil.rmtree(dir_path)
+    os.makedirs(dir_path)
 
     # print(f"Opening: {args.hdf5_file}")
     # print(f"Source redshift z0 = {args.z0}")
@@ -343,6 +352,7 @@ def main():
             calculate_tau_edges(
             s,
             z0=z0,
+            dir_path=dir_path,
             x1=args.x1,
             x2=args.x2,
             y1=args.y1,
