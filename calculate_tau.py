@@ -88,7 +88,8 @@ def project_los_velocity(vel, s, nx, ny, nz, z1=0):
         + vel[..., 2] * nz[:, :, None]
     )
 
-def calculate_tau_edges(s, z0, dir_path, x1=None, x2=None, y1=None, y2=None):
+def calculate_tau_edges(s, z_spread, dir_path, x1=None, x2=None, y1=None, y2=None):
+    spread = (len(z_spread) > 1)
     # Extract necessary data and parameters from the HDF5 file
     header = dict(s['Header'].attrs)
     h = header['HubbleParam']
@@ -144,6 +145,7 @@ def calculate_tau_edges(s, z0, dir_path, x1=None, x2=None, y1=None, y2=None):
     dls = c * (zs[:-1] - zs[1:]) / Hz / (1. + zs[:-1]) # Comoving line element [cm]
     # v_cells = v_cells * velocity_to_cgs
     # Mask so that integration begins at the source
+    z0 = z_spread[0]
     i0 = np.argmax(zs < z0)
     if i0 > 0:
         i0 -= 1
@@ -162,12 +164,25 @@ def calculate_tau_edges(s, z0, dir_path, x1=None, x2=None, y1=None, y2=None):
     Dvs = np.linspace(Dv_min_kms*km, Dv_max_kms*km, n_freq) # Initial frequency offset [cm/s]
     # Calculate optical depths
     taus = np.zeros((xlen, ylen, n_freq)) #3D
+    taus_segs = np.zeros((xlen, ylen, len(z_spread)-1, n_freq)) #3D
     for i in range(n_freq):
         Dv_zs = c * ((Dvs[i]/c + 1) * (1 + z0)/(1 + zs) - 1)
         x = -(Dv_zs + v_cells) / vth
         dtau = (np.sqrt(np.pi) * k0 / (2 * Ks) * (erf(x) - erf(x - Ks*dls)) +
                 2 * a * k0 / (np.sqrt(np.pi) * Ks) * (dawsn(x - Ks*dls) - dawsn(x)))
-        taus[:,:,i] = np.sum(dtau, axis=2) # Integrated damping wing optical depth
+        # If z_spread is specified, calculate taus in appropriate intervals
+        if (spread):
+            for j in range(len(z_spread)-1):
+                z1 = z_spread[j]
+                z2 = z_spread[j+1]
+                i1 = np.argmax(zs < z1)
+                if i1 > 0:
+                    i1 -= 1
+                i2 = np.argmax(zs < z2)
+                if i2 > 0:
+                    i2 -= 1
+                taus_segs[:,:,j,i] = np.sum(dtau[:,:,i1:i2], axis=2) 
+        taus[:,:,i] = np.sum(dtau, axis=2)
     # Create file
     with h5py.File(os.path.join(dir_path, f'tau_map_{z0}.hdf5'), 'w') as f:
         f.attrs['HubbleParam'] = h
@@ -181,6 +196,8 @@ def calculate_tau_edges(s, z0, dir_path, x1=None, x2=None, y1=None, y2=None):
         f.create_dataset('tau', data=taus)
         f.create_dataset('transmission', data=np.exp(-taus))
         f.create_dataset('Dvs', data=Dvs)
+        if (spread):
+            f.create_dataset('transmission_segs', data=np.exp(-taus_segs))
     return Dvs, taus
 
 def calculate_tau_chunk(s, z0, dir_path, chunk=0):
@@ -345,13 +362,13 @@ def main():
     #     print("Pixel slice: full grid")
 
     with open(args.z0_file, 'r') as f:
-        z0_list = [float(line.strip()) for line in f if line.strip()]
+        z_spread_list = [[float(x) for x in line.strip().split(',')] for line in f if line.strip()]
 
     with h5py.File(args.hdf5_file, 'r') as s:
-        for z0 in z0_list:
+        for z_spread in z_spread_list:
             calculate_tau_edges(
             s,
-            z0=z0,
+            z_spread=z_spread,
             dir_path=dir_path,
             x1=args.x1,
             x2=args.x2,
