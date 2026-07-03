@@ -20,23 +20,21 @@ def transmission_integrated_z0(s):
     T_int_ultrared = np.sum(transmission[:,:,i4:]*(4000./800.)/1500., axis=2)
     return z0, T_int_ultrablue, T_int_blue, T_int_center, T_int_red, T_int_ultrared
 
-def plot_Tint(directory):
+def plot_Tint(ss):
     z0s = []
     T_ints_ultrablue = []
     T_ints_blue = []
     T_ints_center = []
     T_ints_red = []
     T_ints_ultrared = []
-    for filename in os.listdir(directory):
-        filepath = os.path.join(directory, filename)
-        with  h5py.File(filepath, 'r') as s:
-            z0, T_int_ultrablue, T_int_blue, T_int_center, T_int_red, T_int_ultrared = transmission_integrated_z0(s)
-            z0s.append(z0)
-            T_ints_ultrablue.append(T_int_ultrablue)
-            T_ints_blue.append(T_int_blue)
-            T_ints_center.append(T_int_center)
-            T_ints_red.append(T_int_red)
-            T_ints_ultrared.append(T_int_ultrared)
+    for s in ss:
+        z0, T_int_ultrablue, T_int_blue, T_int_center, T_int_red, T_int_ultrared = transmission_integrated_z0(s)
+        z0s.append(z0)
+        T_ints_ultrablue.append(T_int_ultrablue)
+        T_ints_blue.append(T_int_blue)
+        T_ints_center.append(T_int_center)
+        T_ints_red.append(T_int_red)
+        T_ints_ultrared.append(T_int_ultrared)
     sort_idx = np.argsort(z0s)
     z0s = np.asarray(z0s)[sort_idx]
     T_ints_ultrablue = np.asarray(T_ints_ultrablue)[sort_idx]
@@ -119,7 +117,11 @@ def main():
     dir = "tau_maps"
     if dir_arg is not None:
         dir = dir_arg
-    plot_Tint(dir)
+    ss = []
+    for filename in os.listdir(dir):
+        filepath = os.path.join(dir, filename)
+        ss.append(h5py.File(filepath, 'r'))
+    plot_Tint(ss)
 
 if __name__ == "__main__":
     main()

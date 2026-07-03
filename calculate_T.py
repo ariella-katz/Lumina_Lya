@@ -88,7 +88,7 @@ def project_los_velocity(vel, s, nx, ny, nz, z1=0):
         + vel[..., 2] * nz[:, :, None]
     )
 
-def calculate_tau_edges(s, z_spread, dir_path, x1=None, x2=None, y1=None, y2=None):
+def calculate_T_edges(s, z_spread, dir_path, x1=None, x2=None, y1=None, y2=None):
     spread = (len(z_spread) > 1)
     # Extract necessary data and parameters from the HDF5 file
     header = dict(s['Header'].attrs)
@@ -158,29 +158,38 @@ def calculate_tau_edges(s, z_spread, dir_path, x1=None, x2=None, y1=None, y2=Non
     Dv_min_kms = -2000.
     Dv_max_kms = 2000.
     Dvs = np.linspace(Dv_min_kms*km, Dv_max_kms*km, n_freq) # Initial frequency offset [cm/s]
-    # Calculate optical depths
-    taus = np.zeros((xlen, ylen, n_freq)) #3D
-    taus_segs = np.zeros((xlen, ylen, len(z_spread)-1, n_freq)) #3D
-    for i in range(n_freq):
-        Dv_zs = c * ((Dvs[i]/c + 1) * (1 + z0)/(1 + zs) - 1)
-        x = -(Dv_zs + v_cells) / vth
-        dtau = (np.sqrt(np.pi) * k0 / (2 * Ks) * (erf(x) - erf(x - Ks*dls)) +
-                2 * a * k0 / (np.sqrt(np.pi) * Ks) * (dawsn(x - Ks*dls) - dawsn(x)))
-        # If z_spread is specified, calculate taus in appropriate intervals
-        if (spread):
-            for j in range(len(z_spread)-1):
-                z1 = z_spread[j]
-                z2 = z_spread[j+1]
-                i1 = np.argmax(zs < z1)
-                if i1 > 0:
-                    i1 -= 1
-                i2 = np.argmax(zs < z2)
-                if i2 > 0:
-                    i2 -= 1
-                taus_segs[:,:,j,i] = np.sum(dtau[:,:,i1:i2], axis=2) 
-        taus[:,:,i] = np.sum(dtau, axis=2)
+    # Calculate transmissions averaged over frequency ranges
+    zlen = len(zs)
+    num_freq_ranges = 5
+    T_cum_bands = np.zeros((num_freq_ranges, zlen))
+    T_bands = np.zeros((num_freq_ranges))
+    freq_range_edges = [-2000, -500, -100, 101, 501, 2001]
+    freq_range_indices = [np.argmin(np.abs(Dvs - freq_range_edges[i]*km)) + int(np.round(i/num_freq_ranges)) 
+                          for i in range(len(freq_range_edges))]
+    for i_bin in range(num_freq_ranges):
+        i_freq_start = freq_range_indices[i_bin]
+        i_freq_range = freq_range_indices[i_bin+1] - freq_range_indices[i_bin]
+        # Calculate optical depths 
+        taus = np.zeros((xlen, ylen, i_freq_range)) #3D
+        T_cum = np.zeros((xlen, ylen, zlen)) #3D
+        T = np.zeros((xlen, ylen)) #3D
+        for i in range(i_freq_range):
+            Dv_zs = c * ((Dvs[i_freq_start + i]/c + 1) * (1 + z0)/(1 + zs) - 1)
+            x = -(Dv_zs + v_cells) / vth
+            dtau = (np.sqrt(np.pi) * k0 / (2 * Ks) * (erf(x) - erf(x - Ks*dls)) +
+                    2 * a * k0 / (np.sqrt(np.pi) * Ks) * (dawsn(x - Ks*dls) - dawsn(x)))
+            if(i == 0 and i_bin == 3):
+                print(dtau[0,0,:])
+                print(np.cumsum(dtau[0,0,:]))
+                print(np.exp(-np.cumsum(dtau[0,0,:])))
+                print("------------------------")
+            T_cum += np.exp(-np.cumsum(dtau, axis=2))
+            T += np.exp(-np.sum(dtau, axis=2))
+        T_cum_bands[i_bin,:] = np.mean(T_cum/i_freq_range, axis=(0,1))
+        T_bands[i_bin] = np.mean(T, axis=(0,1))
+        
     # Create file
-    with h5py.File(os.path.join(dir_path, f'tau_map_{z0}.hdf5'), 'w') as f:
+    with h5py.File(os.path.join(dir_path, f'T_map_{z0}.hdf5'), 'w') as f:
         f.attrs['HubbleParam'] = h
         f.attrs['NumFreq'] = np.int32(n_freq)
         f.attrs['Dv_min'] = Dv_min_kms
@@ -188,15 +197,17 @@ def calculate_tau_edges(s, z_spread, dir_path, x1=None, x2=None, y1=None, y2=Non
         f.attrs['Dv_local'] = 0
         f.attrs['Omega0'] = Omega0
         f.attrs['OmegaBaryon'] = OmegaB
-        f.attrs['Redshift'] = z0
-        f.create_dataset('tau', data=taus)
+        f.attrs['SourceRedshift'] = z0
+        f.create_dataset('T_redshifts', data=zs)
+        f.create_dataset('freq_bands', data=np.array(freq_range_edges))
+        f.create_dataset('T_bands', data=T_bands)
+        f.create_dataset('T_cum_bands', data=T_cum_bands)
         f.create_dataset('Dvs', data=Dvs)
         if (spread):
-            f.create_dataset('tau_segs', data=taus_segs)
             f.create_dataset('z_spread', data=z_spread)
     return Dvs, taus
 
-def calculate_tau_chunk(s, z0, dir_path, chunk=0):
+def calculate_T_chunk(s, z0, dir_path, chunk=0):
     header = dict(s['Header'].attrs)
     # Determine chunk boundaries
     n = h['NumPixels']
@@ -342,7 +353,7 @@ def main():
         print(f"Error: HDF5 file not found: {args.hdf5_file}", file=sys.stderr)
         sys.exit(1)
     
-    dir_path = "tau_maps"
+    dir_path = "T_maps"
     save_dir_arg = args.save_dir
     if save_dir_arg is not None:
         dir_path = os.path.join(save_dir_arg, dir_path)
@@ -350,12 +361,19 @@ def main():
         shutil.rmtree(dir_path)
     os.makedirs(dir_path)
 
+    # print(f"Opening: {args.hdf5_file}")
+    # print(f"Source redshift z0 = {args.z0}")
+    # if any(v is not None for v in [args.x1, args.x2, args.y1, args.y2]):
+    #     print(f"Pixel slice: x=[{args.x1}:{args.x2}], y=[{args.y1}:{args.y2}]")
+    # else:
+    #     print("Pixel slice: full grid")
+
     with open(args.z0_file, 'r') as f:
         z_spread_list = [[float(x) for x in line.strip().split(',')] for line in f if line.strip()]
 
     with h5py.File(args.hdf5_file, 'r') as s:
         for z_spread in z_spread_list:
-            calculate_tau_edges(
+            calculate_T_edges(
             s,
             z_spread=z_spread,
             dir_path=dir_path,
@@ -364,6 +382,9 @@ def main():
             y1=args.y1,
             y2=args.y2,
         )
+
+    # print(f"Done. tau shape: {taus.shape}")
+    # print(f"Output written to: tau_maps/tau_map_{args.z0}.hdf5")
 
 
 if __name__ == "__main__":
