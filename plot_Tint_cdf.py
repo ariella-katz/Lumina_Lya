@@ -55,6 +55,7 @@ def plot_T_cdf(ss, stacked=True):
             else:
                 ax = axes[band_num]
             ax.plot(zs, 1-(1-T_cum_bands[band_num])/(1-T_cum_tot), c=band_shades[band_num][i])
+            # ax.plot(zs, (T_cum_bands[band_num]-T_cum_tot)/T_cum_tot, c=band_shades[band_num][i])
             if (band_num==0 and i==0):
                 ax.plot(np.linspace(zs.min(), zs.max(), 50), sig5*np.ones(50), c='grey', linestyle=':', label=rf'5$\sigma$')
                 ax.plot(np.linspace(zs.min(), zs.max(), 50), sig6*np.ones(50), c='grey', linestyle='--', label=rf'6$\sigma$')
@@ -80,7 +81,7 @@ def plot_T_cdf(ss, stacked=True):
     for ax in axes:
         # ax.set_ylim((0.9997, 1.00004))
         ax.set_yscale('log')
-        ax.set_ylabel(rf'$(\mathcal{{T}}^\text{{int}}_{{z}}-\mathcal{{T}}^\text{{int}}_\text{{tot}})/\mathcal{{T}}^\text{{int}}_\text{{tot}}$')
+        ax.set_ylabel(rf'$1 - (1 - \mathcal{{T}}^\text{{int}}_{{z}})/(1 - \mathcal{{T}}^\text{{int}}_\text{{tot}})$')
     legend1 = axes[0].legend(loc="lower right", bbox_to_anchor=(1., 1.02), ncol=2, borderaxespad=0, frameon=False)
     if stacked:
         legend_handles = [Line2D([0], [0], color=color, lw=2, label=band) for band, color in bands.items()]
