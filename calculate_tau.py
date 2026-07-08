@@ -83,9 +83,7 @@ def get_los_unit_vectors(n, opening_angle, x1=None, x2=None, y1=None, y2=None):
     ny = ny / norm
     nz = nz / norm
 
-    if x1 is None:
-        return nx, ny, nz
-    return nx[x1:x2, y1:y2], ny[x1:x2, y1:y2], nz[x1:x2, y1:y2]
+    return nx, ny, nz
 
 def project_los_velocity(vel, s, nx, ny, nz, z1=0):
     """Project Cartesian velocities onto LOS direction and return cm/s."""
