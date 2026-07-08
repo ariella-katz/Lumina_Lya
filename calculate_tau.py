@@ -163,7 +163,6 @@ def calculate_tau_edges(hdf5_file, z0, dir_path, chunk):
     a = DnuL / (2. * DvD) #3D
     dls = c * (zs[:-1] - zs[1:]) / Hz / (1. + zs[:-1]) # Comoving line element [cm]
     # Mask so that integration begins at the source
-    z0 = z0[0]
     i0 = np.argmax(zs < z0)
     if i0 > 0:
         i0 -= 1
