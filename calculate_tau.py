@@ -105,6 +105,7 @@ def calculate_tau_edges(hdf5_file, z0, dir_path, chunk):
     n = header['NumPixels']  # Number of pixels
     # assert n >= 1280, f"NumPixels = {n}, must be >= 1280"
     n_chunks = np.max([n // CHUNK_SIZE, 4])  # Number of chunks in each dimension
+    chunk_size = n // n_chunks # For low-res
     n_degrade = TARGET_RESOLUTION // n  # Number of times the data was degraded
     nz = TARGET_DEPTH // n_degrade  # Number of redshift slices
     n_depth = DEPTH_SIZE // n_degrade  # Number of depth slices
@@ -114,8 +115,8 @@ def calculate_tau_edges(hdf5_file, z0, dir_path, chunk):
     iy = chunk % n_chunks
     assert 0 <= ix < n_chunks, f"ix = {ix}, n_chunks = {n_chunks}"
     assert 0 <= iy < n_chunks, f"iy = {iy}, n_chunks = {n_chunks}"
-    x1, x2 = ix * CHUNK_SIZE, (ix + 1) * CHUNK_SIZE
-    y1, y2 = iy * CHUNK_SIZE, (iy + 1) * CHUNK_SIZE
+    x1, x2 = ix * chunk_size, (ix + 1) * chunk_size
+    y1, y2 = iy * chunk_size, (iy + 1) * chunk_size
     # Extract necessary data and parameters from the HDF5 file
     h = header['HubbleParam']
     OmegaB = header['OmegaBaryon']
@@ -225,44 +226,50 @@ def parse_args():
         description="Compute Lyman-alpha optical depth maps along lightcone LOS."
     )
     parser.add_argument(
+        "chunk",
+        type=int,
+        help="Chunk number"
+    )
+    parser.add_argument(
         "hdf5_file",
         type=str,
         help="Path to the input lightcone HDF5 file."
     )
     parser.add_argument(
-        "--z0_file",
-        type=str,
-        required=True,
-        help="Path to a text file with one source z0 per line."
+        "z0",
+        type=float,
+        help="Source redshift"
     )
     parser.add_argument(
         "--save_dir",
         type=str,
         help="Directory in which to store tau_maps"
     )
-    parser.add_argument(
-        "--x1", type=int, default=None,
-        help="Start index along x-axis (pixel slice). Default: None (full range)."
-    )
-    parser.add_argument(
-        "--x2", type=int, default=None,
-        help="End index along x-axis (pixel slice). Default: None (full range)."
-    )
-    parser.add_argument(
-        "--y1", type=int, default=None,
-        help="Start index along y-axis (pixel slice). Default: None (full range)."
-    )
-    parser.add_argument(
-        "--y2", type=int, default=None,
-        help="End index along y-axis (pixel slice). Default: None (full range)."
-    )
+    # parser.add_argument(
+    #     "--x1", type=int, default=None,
+    #     help="Start index along x-axis (pixel slice). Default: None (full range)."
+    # )
+    # parser.add_argument(
+    #     "--x2", type=int, default=None,
+    #     help="End index along x-axis (pixel slice). Default: None (full range)."
+    # )
+    # parser.add_argument(
+    #     "--y1", type=int, default=None,
+    #     help="Start index along y-axis (pixel slice). Default: None (full range)."
+    # )
+    # parser.add_argument(
+    #     "--y2", type=int, default=None,
+    #     help="End index along y-axis (pixel slice). Default: None (full range)."
+    # )
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
 
+    chunk = args.chunk
     hdf5_file = args.hdf5_file
+    z0 = args.z0
 
     if not os.path.exists(hdf5_file):
         print(f"Error: HDF5 file not found: {hdf5_file}", file=sys.stderr)
@@ -276,15 +283,16 @@ def main():
         shutil.rmtree(dir_path)
     os.makedirs(dir_path)
 
-    with open(args.z0_file, 'r') as f:
-        z0_list = [[float(x) for x in line.strip().split(',')] for line in f if line.strip()]
+    # with open(args.z0_file, 'r') as f:
+    #     z0_list = [[float(x) for x in line.strip().split(',')] for line in f if line.strip()]
 
-    with h5py.File(hdf5_file, 'r') as s:
-        n = dict(s['Header'].attrs)['NumPixels']  # Number of pixels
-    n_chunks = np.max([n // CHUNK_SIZE, 4])  # Number of chunks in each dimension
-    for z0 in z0_list:
-        with Pool(processes=64) as pool:
-            pool.starmap(calculate_tau_edges, [(hdf5_file, z0, dir_path, chunk) for chunk in range(n_chunks*n_chunks)])
+    # with h5py.File(hdf5_file, 'r') as s:
+    #     n = dict(s['Header'].attrs)['NumPixels']  # Number of pixels
+    # n_chunks = np.max([n // CHUNK_SIZE, 4])  # Number of chunks in each dimension
+    # with Pool(processes=64) as pool:
+    #     pool.starmap(calculate_tau_edges, [(hdf5_file, z0, dir_path, chunk) for chunk in range(n_chunks*n_chunks)])
+
+    calculate_tau_edges(hdf5_file, z0, dir_path, chunk)
 
 
 if __name__ == "__main__":
