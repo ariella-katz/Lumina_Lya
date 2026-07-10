@@ -96,7 +96,7 @@ def project_los_velocity(vel, s, nx, ny, nz, z1=0):
         + vel[..., 2] * nz[:, :, None]
     )
 
-def calculate_tau_edges(hdf5_file, z0, dir_path, chunk):
+def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
     s = h5py.File(hdf5_file, 'r')
     header = dict(s['Header'].attrs)
     # Determine chunk boundaries
@@ -162,19 +162,7 @@ def calculate_tau_edges(hdf5_file, z0, dir_path, chunk):
     k0 = x_HIs * n_H * sigma0 #3D #fix n_H!!!!!
     a = DnuL / (2. * DvD) #3D
     dls = c * (zs[:-1] - zs[1:]) / Hz / (1. + zs[:-1]) # Comoving line element [cm]
-    # Mask so that integration begins at the source
-    i0 = np.argmax(zs < z0)
-    if i0 > 0:
-        i0 -= 1
-    zs = zs[i0:-1, None]
-    z0 = zs[0]
-    zmids = zmids[i0:, None]
-    v_cells = v_cells[:,:,i0:, None]
-    dls = dls[i0:, None]
-    Ks = Ks[:,:,i0:, None]
-    k0 = k0[:,:,i0:, None]
-    vth = vth[:,:,i0:, None]
-    a = a[:,:,i0:, None]
+    zs = zs[:-1]
     # Velocity offsets
     Dv_min_kms = -2000.
     Dv_max_kms = 2000.
@@ -182,39 +170,53 @@ def calculate_tau_edges(hdf5_file, z0, dir_path, chunk):
     num_freq_ranges = 5
     freq_range_edges = [-2000, -500, -100, 101, 501, 2001]
     freq_range_indices = [np.argmin(np.abs(Dvs - freq_range_edges[i]*km)) + int(np.round(i/num_freq_ranges)) 
-                          for i in range(len(freq_range_edges))]
-    tau_band_avgs = []
-    for i_bin in range(num_freq_ranges):
-        i_freq_start = freq_range_indices[i_bin]
-        i_freq_range = freq_range_indices[i_bin+1] - freq_range_indices[i_bin]
-        # Calculate optical depths (vectorized)
-        Dvs_band = Dvs[None, None, None, i_freq_start:i_freq_start+i_freq_range]
-        Dv_zs = c * ((Dvs_band/c + 1) * (1 + z0)/(1 + zs) - 1)
-        x = -(Dv_zs + v_cells) / vth
-        dtau = (np.sqrt(np.pi) * k0 / (2 * Ks) * (erf(x) - erf(x - Ks*dls)) +
-                2 * a * k0 / (np.sqrt(np.pi) * Ks) * (dawsn(x - Ks*dls) - dawsn(x))) # [x, y, z, freq]
-        taus = np.sum(dtau, axis=2) # [x, y, freq]
-        # Transform to transmission space
-        transmissions = np.exp(-taus)
-        # Take band averages
-        transmission_band_avg = np.sum(transmissions, axis=-1) / i_freq_range # [x, y]
-        # Back to tau space
-        tau_band_avg = np.log(transmission_band_avg)
-        tau_band_avgs.append(tau_band_avg) # tau_band_avgs: [band, x, y]
-    # Create file
-    with h5py.File(os.path.join(dir_path, f'tau_map_{z0}_{chunk}.hdf5'), 'w') as f:
-        f.attrs['HubbleParam'] = h
-        f.attrs['NumFreq'] = np.int32(n_freq)
-        f.attrs['Dv_min'] = Dv_min_kms
-        f.attrs['Dv_max'] = Dv_max_kms
-        f.attrs['Dv_local'] = 0
-        f.attrs['Omega0'] = Omega0
-        f.attrs['OmegaBaryon'] = OmegaB
-        f.attrs['Redshift'] = z0
-        f.attrs['Chunk'] = chunk
-        f.create_dataset('tau_band_avgs', data=taus)
-        f.create_dataset('Dvs', data=Dvs)
-        f.create_dataset('freq_band_edges', data=freq_range_edges)
+                        for i in range(len(freq_range_edges))]
+    for z0 in z0_list:
+        # Mask so that integration begins at the source
+        i0 = np.argmax(zs < z0)
+        if i0 > 0:
+            i0 -= 1
+        zs = zs[i0:, None]
+        z0 = zs[0]
+        zmids = zmids[i0:, None]
+        v_cells = v_cells[:,:,i0:, None]
+        dls = dls[i0:, None]
+        Ks = Ks[:,:,i0:, None]
+        k0 = k0[:,:,i0:, None]
+        vth = vth[:,:,i0:, None]
+        a = a[:,:,i0:, None]
+        tau_band_avgs = []
+        for i_bin in range(num_freq_ranges):
+            i_freq_start = freq_range_indices[i_bin]
+            i_freq_range = freq_range_indices[i_bin+1] - freq_range_indices[i_bin]
+            # Calculate optical depths (vectorized)
+            Dvs_band = Dvs[None, None, None, i_freq_start:i_freq_start+i_freq_range]
+            Dv_zs = c * ((Dvs_band/c + 1) * (1 + z0)/(1 + zs) - 1)
+            x = -(Dv_zs + v_cells) / vth
+            dtau = (np.sqrt(np.pi) * k0 / (2 * Ks) * (erf(x) - erf(x - Ks*dls)) +
+                    2 * a * k0 / (np.sqrt(np.pi) * Ks) * (dawsn(x - Ks*dls) - dawsn(x))) # [x, y, z, freq]
+            taus = np.sum(dtau, axis=2) # [x, y, freq]
+            # Transform to transmission space
+            transmissions = np.exp(-taus)
+            # Take band averages
+            transmission_band_avg = np.sum(transmissions, axis=-1) / i_freq_range # [x, y]
+            # Back to tau space
+            tau_band_avg = np.log(transmission_band_avg)
+            tau_band_avgs.append(tau_band_avg) # tau_band_avgs: [band, x, y]
+        # Create file
+        with h5py.File(os.path.join(dir_path, f'tau_map_{z0}_{chunk}.hdf5'), 'w') as f:
+            f.attrs['HubbleParam'] = h
+            f.attrs['NumFreq'] = np.int32(n_freq)
+            f.attrs['Dv_min'] = Dv_min_kms
+            f.attrs['Dv_max'] = Dv_max_kms
+            f.attrs['Dv_local'] = 0
+            f.attrs['Omega0'] = Omega0
+            f.attrs['OmegaBaryon'] = OmegaB
+            f.attrs['Redshift'] = z0
+            f.attrs['Chunk'] = chunk
+            f.create_dataset('tau_band_avgs', data=taus)
+            f.create_dataset('Dvs', data=Dvs)
+            f.create_dataset('freq_band_edges', data=freq_range_edges)
     return Dvs, taus
 # store band-average tau maps for every half-integer redshift from 3 to 12
 
@@ -233,9 +235,9 @@ def parse_args():
         help="Path to the input lightcone HDF5 file."
     )
     parser.add_argument(
-        "z0",
-        type=float,
-        help="Source redshift"
+        "z0_file",
+        type=str,
+        help="File containing source redshifts (one per line, descending order)"
     )
     parser.add_argument(
         "--save_dir",
@@ -266,13 +268,14 @@ def main():
 
     chunk = args.chunk
     hdf5_file = args.hdf5_file
-    z0 = args.z0
+    with open(args.z0_file, 'r') as f:
+        z0_list = [float(line.strip()) for line in f if line.strip()]
 
     if not os.path.exists(hdf5_file):
         print(f"Error: HDF5 file not found: {hdf5_file}", file=sys.stderr)
         sys.exit(1)
     
-    dir_path = "tau_maps"
+    dir_path = f"tau_maps_{len(z0_list)}"
     save_dir_arg = args.save_dir
     if save_dir_arg is not None:
         dir_path = os.path.join(save_dir_arg, dir_path)
@@ -288,7 +291,7 @@ def main():
     # with Pool(processes=64) as pool:
     #     pool.starmap(calculate_tau_edges, [(hdf5_file, z0, dir_path, chunk) for chunk in range(n_chunks*n_chunks)])
 
-    calculate_tau_edges(hdf5_file, z0, dir_path, chunk)
+    calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk)
 
 
 if __name__ == "__main__":
