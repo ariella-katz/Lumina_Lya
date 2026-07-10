@@ -276,9 +276,8 @@ def main():
     save_dir_arg = args.save_dir
     if save_dir_arg is not None:
         dir_path = os.path.join(save_dir_arg, dir_path)
-    if os.path.exists(dir_path):
-        shutil.rmtree(dir_path)
-    os.makedirs(dir_path)
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
 
     # with open(args.z0_file, 'r') as f:
     #     z0_list = [[float(x) for x in line.strip().split(',')] for line in f if line.strip()]
