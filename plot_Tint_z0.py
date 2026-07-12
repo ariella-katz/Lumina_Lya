@@ -20,14 +20,38 @@ def transmission_integrated_z0_old(s):
     T_int_ultrared = np.sum(transmission[:,:,i4:]*(4000./800.)/1500., axis=2)
     return z0, T_int_ultrablue, T_int_blue, T_int_center, T_int_red, T_int_ultrared
 
-def transmission_integrated_z0(s):
-    z0 = s.attrs['Redshift']
-    taus = s['tau_band_avgs'][:]
-    T_int_ultrablue = np.exp(-taus[0])
-    T_int_blue = np.exp(-taus[1])
-    T_int_center = np.exp(-taus[2])
-    T_int_red = np.exp(-taus[3])
-    T_int_ultrared = np.exp(-taus[4])
+def transmission_integrated_z0(z0_ss):
+    "Takes in a file created by calculate_tau.py, which includes z0, taus, transmission, Dvs"
+    n_chunks = len(z0_ss)
+    s0 = z0_ss[0]
+    z0 = s0.attrs['Redshift']
+    tau_band_avgs_0 = s0['tau_band_avgs'][:]
+    chunk_size = tau_band_avgs_0.shape[1]
+    T_int_ultrablue = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
+    T_int_blue = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
+    T_int_center = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
+    T_int_red = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
+    T_int_ultrared = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
+    ix1 = 0
+    iy1 = 0
+    x1 = ix1 * chunk_size
+    y1 = iy1 * chunk_size
+    T_int_ultrablue[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_0[0])
+    T_int_blue[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_0[1])
+    T_int_center[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_0[2])
+    T_int_red[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_0[3])
+    T_int_ultrared[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_0[4])
+    for chunk in range(n_chunks-1)+1:
+        s_chunk = z0_ss[chunk]
+        chunk_num = s_chunk.attrs['Chunk']
+        tau_band_avgs_chunk = s_chunk['tau_band_avgs'][:]
+        x1 = chunk_size * (chunk_num % int(np.sqrt(n_chunks)))
+        y1 = chunk_size * (chunk_num // int(np.sqrt(n_chunks)))
+        T_int_ultrablue[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_chunk[0])
+        T_int_blue[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_chunk[1])
+        T_int_center[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_chunk[2])
+        T_int_red[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_chunk[3])
+        T_int_ultrared[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_chunk[4])
     return z0, T_int_ultrablue, T_int_blue, T_int_center, T_int_red, T_int_ultrared
 
 def plot_Tint(ss):
@@ -37,8 +61,8 @@ def plot_Tint(ss):
     T_ints_center = []
     T_ints_red = []
     T_ints_ultrared = []
-    for s in ss:
-        z0, T_int_ultrablue, T_int_blue, T_int_center, T_int_red, T_int_ultrared = transmission_integrated_z0(s)
+    for z0_ss in ss:
+        z0, T_int_ultrablue, T_int_blue, T_int_center, T_int_red, T_int_ultrared = transmission_integrated_z0(z0_ss)
         z0s.append(z0)
         T_ints_ultrablue.append(T_int_ultrablue)
         T_ints_blue.append(T_int_blue)
@@ -127,11 +151,17 @@ def main():
     dir = "tau_maps"
     if dir_arg is not None:
         dir = dir_arg
+
+    # Group files by z0
     ss = []
-    for filename in os.listdir(dir):
-        filepath = os.path.join(dir, filename)
-        ss.append(h5py.File(filepath, 'r'))
+    for z0_dir in os.listdir(dir):
+        z0_ss = []
+        for filename in os.listdir(z0_dir):
+            filepath = os.path.join(dir, z0_dir, filename)
+            z0_ss.append(h5py.File(filepath, 'r'))
+        ss.append(z0_ss)
     plot_Tint(ss)
+
 
 if __name__ == "__main__":
     main()
