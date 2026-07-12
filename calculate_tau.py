@@ -139,10 +139,10 @@ def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
     nx, ny, nz = get_los_unit_vectors(n, opening_angle, x1=x1, x2=x2, y1=y1, y2=y2)
     z1 = 0
     z2 = z1 + v_cells.shape[2]
-    v_cells *= velocity_to_cgs[None, None, z1:z2, None]
-    v_cells = (v_cells[..., 0] * nx[:, :, None] + 
-               v_cells[..., 1] * ny[:, :, None] +
-               v_cells[..., 2] * nz[:, :, None])
+    v_cells_orig *= velocity_to_cgs[None, None, z1:z2, None]
+    v_cells_orig = (v_cells_orig[..., 0] * nx[:, :, None] + 
+               v_cells_orig[..., 1] * ny[:, :, None] +
+               v_cells_orig[..., 2] * nz[:, :, None])
     # Constants
     H0 = h * 100. * km / Mpc
     X = 0.76 # Hydrogen mass fraction
