@@ -126,9 +126,8 @@ def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
     zs = np.copy(s['Redshifts'])
     densities = s['Density'][x1:x2,y1:y2,:].astype(np.float64)
     x_HIs = 1. - s['HII_Fraction'][x1:x2,y1:y2,:].astype(np.float64) # Neutral hydrogen fraction [code units] #3D
-    v_cells = s['Velocities'][x1:x2,y1:y2,:].astype(np.float64) # Gas velocity [code units] #3D
+    v_cells_orig = s['Velocities'][x1:x2,y1:y2,:].astype(np.float64) # Gas velocity [code units] #3D
     # Conversions
-    zmids = 0.5 * (zs[:-1] + zs[1:]) # Redshift intervals
     a_scale = 1. / (1. + zs[:-1])
     velocity_to_cgs = (np.sqrt(a_scale) * UnitVelocity_in_cm_per_s)
     length_to_cgs = a_scale * UnitLength_in_cm / h
@@ -147,7 +146,6 @@ def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
     # Constants
     H0 = h * 100. * km / Mpc
     X = 0.76 # Hydrogen mass fraction
-    G = 6.6725985e-8 # Gravitational constant [cm^3/g/s^2]
     f12 = 0.4162 # Lyman-alpha oscillator strength
     DnuL = 9.936e7 # Lyman-alpha natural line width
     nu0 = 2.466e15 # Lyman-alpha line frequency [Hz]
@@ -155,14 +153,14 @@ def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
     # Derived quantities
     n_H = X * densities * density_to_cgs / mH
     Hz = H0 * np.sqrt(Omega0) * (1. + zs[:-1])**(3./2.) # Hubble parameter [s^-1] 
-    vth = vth_div_sqrtT * np.sqrt(Ts) #3D
+    vth_orig = vth_div_sqrtT * np.sqrt(Ts) #3D
     DvD = vth * nu0 / c #3D
-    Ks = Hz / vth #3D
+    Ks_orig = Hz / vth #3D
     sigma0 = f12 * np.sqrt(np.pi) * ee**2 / (me * vth * nu0) #3D
-    k0 = x_HIs * n_H * sigma0 #3D #fix n_H!!!!!
-    a = DnuL / (2. * DvD) #3D
-    dls = c * (zs[:-1] - zs[1:]) / Hz / (1. + zs[:-1]) # Comoving line element [cm]
-    zs = zs[:-1]
+    k0_orig = x_HIs * n_H * sigma0 #3D #fix n_H!!!!!
+    a_orig = DnuL / (2. * DvD) #3D
+    dls_orig = c * (zs[:-1] - zs[1:]) / Hz / (1. + zs[:-1]) # Comoving line element [cm]
+    zs_orig = zs[:-1]
     # Velocity offsets
     Dv_min_kms = -2000.
     Dv_max_kms = 2000.
@@ -172,19 +170,19 @@ def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
     freq_range_indices = [np.argmin(np.abs(Dvs - freq_range_edges[i]*km)) + int(np.round(i/num_freq_ranges)) 
                         for i in range(len(freq_range_edges))]
     for z0 in z0_list:
+        filepath = f'z0={z0}/tau_map_{z0}_{chunk}.hdf5'
         # Mask so that integration begins at the source
         i0 = np.argmax(zs < z0)
         if i0 > 0:
             i0 -= 1
-        zs = zs[i0:, None]
+        zs = zs_orig[i0:, None]
         z0 = zs[0]
-        zmids = zmids[i0:, None]
-        v_cells = v_cells[:,:,i0:, None]
-        dls = dls[i0:, None]
-        Ks = Ks[:,:,i0:, None]
-        k0 = k0[:,:,i0:, None]
-        vth = vth[:,:,i0:, None]
-        a = a[:,:,i0:, None]
+        v_cells = v_cells_orig[:,:,i0:, None]
+        dls = dls_orig[i0:, None]
+        Ks = Ks_orig[:,:,i0:, None]
+        k0 = k0_orig[:,:,i0:, None]
+        vth = vth_orig[:,:,i0:, None]
+        a = a_orig[:,:,i0:, None]
         tau_band_avgs = []
         for i_bin in range(num_freq_ranges):
             i_freq_start = freq_range_indices[i_bin]
@@ -204,7 +202,7 @@ def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
             tau_band_avg = np.log(transmission_band_avg)
             tau_band_avgs.append(tau_band_avg) # tau_band_avgs: [band, x, y]
         # Create file
-        with h5py.File(os.path.join(dir_path, f'tau_map_{z0}_{chunk}.hdf5'), 'w') as f:
+        with h5py.File(os.path.join(dir_path, filepath), 'w') as f:
             f.attrs['HubbleParam'] = h
             f.attrs['NumFreq'] = np.int32(n_freq)
             f.attrs['Dv_min'] = Dv_min_kms
@@ -214,7 +212,7 @@ def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
             f.attrs['OmegaBaryon'] = OmegaB
             f.attrs['Redshift'] = z0
             f.attrs['Chunk'] = chunk
-            f.create_dataset('tau_band_avgs', data=taus)
+            f.create_dataset('tau_band_avgs', data=tau_band_avgs)
             f.create_dataset('Dvs', data=Dvs)
             f.create_dataset('freq_band_edges', data=freq_range_edges)
     return Dvs, taus
@@ -291,7 +289,7 @@ def main():
     # with Pool(processes=64) as pool:
     #     pool.starmap(calculate_tau_edges, [(hdf5_file, z0, dir_path, chunk) for chunk in range(n_chunks*n_chunks)])
 
-    calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk)
+    calculate_tau_edges(hdf5_file, z0_list.sort(reverse=True), dir_path, chunk)
 
 
 if __name__ == "__main__":
