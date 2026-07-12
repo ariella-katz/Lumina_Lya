@@ -171,8 +171,9 @@ def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
                         for i in range(len(freq_range_edges))]
     for z0 in z0_list:
         subdir = f'z0={z0}'
-        if not os.path.exists(subdir):
-            os.makedirs(subdir)
+        if not os.path.exists(os.join(dir_path, subdir)):
+            os.makedirs(os.join(dir_path, subdir))
+        filename = f'tau_map_{z0}_{chunk}.hdf5'
         # Mask so that integration begins at the source
         i0 = np.argmax(zs < z0)
         if i0 > 0:
@@ -204,7 +205,7 @@ def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
             tau_band_avg = np.log(transmission_band_avg)
             tau_band_avgs.append(tau_band_avg) # tau_band_avgs: [band, x, y]
         # Create file
-        with h5py.File(os.path.join(dir_path, subdir, f'tau_map_{z0}_{chunk}.hdf5'), 'w') as f:
+        with h5py.File(os.path.join(dir_path, subdir, filename), 'w') as f:
             f.attrs['HubbleParam'] = h
             f.attrs['NumFreq'] = np.int32(n_freq)
             f.attrs['Dv_min'] = Dv_min_kms
