@@ -5,7 +5,7 @@ import os
 import matplotlib.pyplot as plt
 import argparse
 
-def transmission_integrated_z0(s):
+def transmission_integrated_z0_old(s):
     "Takes in a file created by calculate_tau.py, which includes z0, taus, transmission, Dvs"
     z0 = s.attrs['Redshift']
     transmission = np.copy(s['transmission'])
@@ -18,6 +18,16 @@ def transmission_integrated_z0(s):
     T_int_center = np.sum(transmission[:,:,i2:i3]*(4000./800.)/200., axis=2)
     T_int_red = np.sum(transmission[:,:,i3:i4]*(4000./800.)/400., axis=2)
     T_int_ultrared = np.sum(transmission[:,:,i4:]*(4000./800.)/1500., axis=2)
+    return z0, T_int_ultrablue, T_int_blue, T_int_center, T_int_red, T_int_ultrared
+
+def transmission_integrated_z0(s):
+    z0 = s.attrs['Redshift']
+    taus = s['tau_band_avgs'][:]
+    T_int_ultrablue = np.exp(-taus[0])
+    T_int_blue = np.exp(-taus[1])
+    T_int_center = np.exp(-taus[2])
+    T_int_red = np.exp(-taus[3])
+    T_int_ultrared = np.exp(-taus[4])
     return z0, T_int_ultrablue, T_int_blue, T_int_center, T_int_red, T_int_ultrared
 
 def plot_Tint(ss):
