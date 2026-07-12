@@ -268,6 +268,7 @@ def main():
     hdf5_file = args.hdf5_file
     with open(args.z0_file, 'r') as f:
         z0_list = [float(line.strip()) for line in f if line.strip()]
+    z0_list.sort(reverse=True)
 
     if not os.path.exists(hdf5_file):
         print(f"Error: HDF5 file not found: {hdf5_file}", file=sys.stderr)
@@ -289,7 +290,7 @@ def main():
     # with Pool(processes=64) as pool:
     #     pool.starmap(calculate_tau_edges, [(hdf5_file, z0, dir_path, chunk) for chunk in range(n_chunks*n_chunks)])
 
-    calculate_tau_edges(hdf5_file, z0_list.sort(reverse=True), dir_path, chunk)
+    calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk)
 
 
 if __name__ == "__main__":
