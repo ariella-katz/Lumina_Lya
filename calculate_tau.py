@@ -138,7 +138,7 @@ def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
     opening_angle = float(header['OpeningAngle'])
     nx, ny, nz = get_los_unit_vectors(n, opening_angle, x1=x1, x2=x2, y1=y1, y2=y2)
     z1 = 0
-    z2 = z1 + v_cells.shape[2]
+    z2 = z1 + v_cells_orig.shape[2]
     v_cells_orig *= velocity_to_cgs[None, None, z1:z2, None]
     v_cells_orig = (v_cells_orig[..., 0] * nx[:, :, None] + 
                v_cells_orig[..., 1] * ny[:, :, None] +
