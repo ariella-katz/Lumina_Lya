@@ -171,8 +171,8 @@ def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
                         for i in range(len(freq_range_edges))]
     for z0 in z0_list:
         subdir = f'z0={z0}'
-        if not os.path.exists(os.join(dir_path, subdir)):
-            os.makedirs(os.join(dir_path, subdir))
+        if not os.path.exists(os.path.join(dir_path, subdir)):
+            os.makedirs(os.path.join(dir_path, subdir))
         filename = f'tau_map_{z0}_{chunk}.hdf5'
         # Mask so that integration begins at the source
         i0 = np.argmax(zs < z0)
