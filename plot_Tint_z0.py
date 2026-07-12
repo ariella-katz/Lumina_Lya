@@ -41,7 +41,7 @@ def transmission_integrated_z0(z0_ss):
     T_int_center[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_0[2])
     T_int_red[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_0[3])
     T_int_ultrared[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_0[4])
-    for chunk in range(n_chunks-1)+1:
+    for chunk in range(1, n_chunks):
         s_chunk = z0_ss[chunk]
         chunk_num = s_chunk.attrs['Chunk']
         tau_band_avgs_chunk = s_chunk['tau_band_avgs'][:]
@@ -154,7 +154,8 @@ def main():
 
     # Group files by z0
     ss = []
-    for z0_dir in os.listdir(dir):
+    for z0_name in os.listdir(dir):
+        z0_dir = os.path.join(dir, z0_name)
         z0_ss = []
         for filename in os.listdir(z0_dir):
             filepath = os.path.join(dir, z0_dir, filename)
