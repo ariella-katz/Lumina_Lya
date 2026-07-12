@@ -154,9 +154,9 @@ def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
     n_H = X * densities * density_to_cgs / mH
     Hz = H0 * np.sqrt(Omega0) * (1. + zs[:-1])**(3./2.) # Hubble parameter [s^-1] 
     vth_orig = vth_div_sqrtT * np.sqrt(Ts) #3D
-    DvD = vth * nu0 / c #3D
-    Ks_orig = Hz / vth #3D
-    sigma0 = f12 * np.sqrt(np.pi) * ee**2 / (me * vth * nu0) #3D
+    DvD = vth_orig * nu0 / c #3D
+    Ks_orig = Hz / vth_orig #3D
+    sigma0 = f12 * np.sqrt(np.pi) * ee**2 / (me * vth_orig * nu0) #3D
     k0_orig = x_HIs * n_H * sigma0 #3D #fix n_H!!!!!
     a_orig = DnuL / (2. * DvD) #3D
     dls_orig = c * (zs[:-1] - zs[1:]) / Hz / (1. + zs[:-1]) # Comoving line element [cm]
