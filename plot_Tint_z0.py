@@ -55,12 +55,11 @@ def transmission_integrated_z0_banded(z0_ss):
         T_int_ultrared[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_chunk[4])
     return z0, T_int_ultrablue, T_int_blue, T_int_center, T_int_red, T_int_ultrared
 
-def transmission_integrated_z0(z0_ss, z0=None):
+def transmission_integrated_z0(z0_ss):
     "Takes in a file created by calculate_tau.py, which includes z0, taus, transmission, Dvs"
     n_chunks = int(np.sqrt(len(z0_ss)))
     s0 = z0_ss[0]
-    if z0 is None:
-        z0 = float(np.asarray(s0.attrs['Redshift']).squeeze())
+    z0 = float(np.asarray(s0.attrs['Redshift']).squeeze())
     chunk_size = s0.attrs['ChunkSize']
     T_int_ultrablue = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
     T_int_blue = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
@@ -97,8 +96,8 @@ def plot_Tint(ss):
     T_ints_center = []
     T_ints_red = []
     T_ints_ultrared = []
-    for z0, z0_ss in ss:
-        z0, T_int_ultrablue, T_int_blue, T_int_center, T_int_red, T_int_ultrared = transmission_integrated_z0(z0_ss, z0=z0)
+    for z0_ss in ss:
+        z0, T_int_ultrablue, T_int_blue, T_int_center, T_int_red, T_int_ultrared = transmission_integrated_z0(z0_ss)
         z0s.append(z0)
         T_ints_ultrablue.append(T_int_ultrablue)
         T_ints_blue.append(T_int_blue)
@@ -180,21 +179,6 @@ def parse_args():
         help="Directory of tau maps"
     )
     return parser.parse_args()
-
-def infer_z0_from_path(path):
-    for candidate in [os.path.basename(path), os.path.basename(os.path.dirname(path))]:
-        if candidate.startswith('z0='):
-            try:
-                return float(candidate.split('=', 1)[1])
-            except ValueError:
-                pass
-        if candidate.startswith('tau_map_'):
-            try:
-                return float(candidate.split('_')[2])
-            except (IndexError, ValueError):
-                pass
-    return None
-
 
 def main():
     args = parse_args()
