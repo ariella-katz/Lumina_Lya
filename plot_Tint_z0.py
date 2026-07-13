@@ -193,17 +193,37 @@ def main():
 
     print(f"Reading z0 folders from: {data_dir}")
 
-    # Group files by z0
+    # Support both layouts:
+    # 1) data_dir contains z0 subfolders, e.g. tau_maps/6/...
+    # 2) data_dir itself contains the tau files, e.g. tau_maps_8/...
+    # 3) data_dir contains subfolders named like z0=6, z0=7, ...
     ss = []
-    for z0_name in sorted(os.listdir(data_dir)):
-        z0_dir = os.path.join(data_dir, z0_name)
-        if not os.path.isdir(z0_dir):
-            continue
-        z0_ss = []
-        for filename in sorted(os.listdir(z0_dir)):
-            filepath = os.path.join(z0_dir, filename)
-            z0_ss.append(h5py.File(filepath, 'r'))
-        ss.append(z0_ss)
+
+    def add_group_from_dir(group_dir):
+        if not os.path.isdir(group_dir):
+            return
+        entries = sorted(os.listdir(group_dir))
+        if any(entry.endswith('.hdf5') for entry in entries):
+            z0_ss = []
+            for filename in sorted(entries):
+                if not filename.endswith('.hdf5'):
+                    continue
+                filepath = os.path.join(group_dir, filename)
+                z0_ss.append(h5py.File(filepath, 'r'))
+            if z0_ss:
+                ss.append(z0_ss)
+            return
+
+        for entry in entries:
+            child_dir = os.path.join(group_dir, entry)
+            if os.path.isdir(child_dir):
+                add_group_from_dir(child_dir)
+
+    add_group_from_dir(data_dir)
+
+    if not ss:
+        raise FileNotFoundError(f"No tau-map files found under: {data_dir}")
+
     plot_Tint(ss)
 
 
