@@ -57,9 +57,9 @@ def transmission_integrated_z0_banded(z0_ss):
 
 def transmission_integrated_z0(z0_ss):
     "Takes in a file created by calculate_tau.py, which includes z0, taus, transmission, Dvs"
-    n_chunks = len(z0_ss)
+    n_chunks = int(np.sqrt(len(z0_ss)))
     s0 = z0_ss[0]
-    z0 = s0.attrs['Redshift']
+    z0 = float(np.asarray(s0.attrs['Redshift']).squeeze())
     chunk_size = s0.attrs['ChunkSize']
     T_int_ultrablue = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
     T_int_blue = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
@@ -76,12 +76,12 @@ def transmission_integrated_z0(z0_ss):
     T_int_center[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_center_0
     T_int_red[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_red_0
     T_int_ultrared[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_ultrared_0
-    for chunk in range(n_chunks-1)+1:
+    for chunk in range(1, n_chunks):
         s_chunk = z0_ss[chunk]
         _, T_int_ultrablue_chunk, T_int_blue_chunk, T_int_center_chunk, T_int_red_chunk, T_int_ultrared_chunk = transmission_integrated_z0_old(s_chunk)
         chunk_num = s_chunk.attrs['Chunk']
-        x1 = chunk_size * (chunk_num % int(np.sqrt(n_chunks)))
-        y1 = chunk_size * (chunk_num // int(np.sqrt(n_chunks)))
+        x1 = chunk_size * (chunk_num // n_chunks)
+        y1 = chunk_size * (chunk_num % n_chunks)
         T_int_ultrablue[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_ultrablue_chunk
         T_int_blue[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_blue_chunk
         T_int_center[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_center_chunk
@@ -189,7 +189,8 @@ def main():
 
     # Group files by z0
     ss = []
-    for z0_dir in os.listdir(dir):
+    for z0_name in os.listdir(dir):
+        z0_dir = os.path.join(dir, z0_name)
         z0_ss = []
         for filename in os.listdir(z0_dir):
             filepath = os.path.join(dir, z0_dir, filename)
