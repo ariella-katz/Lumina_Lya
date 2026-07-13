@@ -202,7 +202,7 @@ def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
             # Take band averages
             transmission_band_avg = np.sum(transmissions, axis=-1) / i_freq_range # [x, y]
             # Back to tau space
-            tau_band_avg = np.log(transmission_band_avg)
+            tau_band_avg = -np.log(transmission_band_avg)
             tau_band_avgs.append(tau_band_avg) # tau_band_avgs: [band, x, y]
         # Create file
         with h5py.File(os.path.join(dir_path, subdir, filename), 'w') as f:
