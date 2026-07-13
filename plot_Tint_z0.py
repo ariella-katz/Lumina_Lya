@@ -183,17 +183,25 @@ def parse_args():
 def main():
     args = parse_args()
     dir_arg = args.directory
-    dir = "tau_maps"
+    data_dir = "tau_maps"
     if dir_arg is not None:
-        dir = dir_arg
+        data_dir = dir_arg
+
+    data_dir = os.path.abspath(data_dir)
+    if not os.path.isdir(data_dir):
+        raise FileNotFoundError(f"Could not find tau-map directory: {data_dir}")
+
+    print(f"Reading z0 folders from: {data_dir}")
 
     # Group files by z0
     ss = []
-    for z0_name in os.listdir(dir):
-        z0_dir = os.path.join(dir, z0_name)
+    for z0_name in sorted(os.listdir(data_dir)):
+        z0_dir = os.path.join(data_dir, z0_name)
+        if not os.path.isdir(z0_dir):
+            continue
         z0_ss = []
-        for filename in os.listdir(z0_dir):
-            filepath = os.path.join(dir, z0_dir, filename)
+        for filename in sorted(os.listdir(z0_dir)):
+            filepath = os.path.join(z0_dir, filename)
             z0_ss.append(h5py.File(filepath, 'r'))
         ss.append(z0_ss)
     plot_Tint(ss)
