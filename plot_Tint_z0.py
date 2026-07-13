@@ -22,9 +22,9 @@ def transmission_integrated_z0_old(s):
 
 def transmission_integrated_z0(z0_ss):
     "Takes in a file created by calculate_tau.py, which includes z0, taus, transmission, Dvs"
-    n_chunks = len(z0_ss)
+    n_chunks = int(np.sqrt(len(z0_ss)))
     s0 = z0_ss[0]
-    z0 = s0.attrs['Redshift']
+    z0 = float(np.asarray(s0.attrs['Redshift']).squeeze())
     tau_band_avgs_0 = s0['tau_band_avgs'][:]
     chunk_size = tau_band_avgs_0.shape[1]
     T_int_ultrablue = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
@@ -45,8 +45,8 @@ def transmission_integrated_z0(z0_ss):
         s_chunk = z0_ss[chunk]
         chunk_num = s_chunk.attrs['Chunk']
         tau_band_avgs_chunk = s_chunk['tau_band_avgs'][:]
-        x1 = chunk_size * (chunk_num % int(np.sqrt(n_chunks)))
-        y1 = chunk_size * (chunk_num // int(np.sqrt(n_chunks)))
+        x1 = chunk_size * (chunk_num // n_chunks)
+        y1 = chunk_size * (chunk_num % n_chunks)
         T_int_ultrablue[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_chunk[0])
         T_int_blue[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_chunk[1])
         T_int_center[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_chunk[2])
