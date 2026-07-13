@@ -5,8 +5,7 @@ import sys
 import os
 import argparse
 import shutil
-import mpmath as mp
-from multiprocessing import Pool 
+from multiprocessing import Pool
 
 #KILOMETER = 1e5             # Kilometer [cm]
 #MEGAPARSEC = 3.085678e24    # Megaparsec [cm]
@@ -97,18 +96,7 @@ def project_los_velocity(vel, s, nx, ny, nz, z1=0):
         + vel[..., 2] * nz[:, :, None]
     )
 
-def hyp2f2_term(x):
-    # vectorized wrapper for mpmath's 2F2(1,1;3/2,2;-x^2)
-    vec = np.vectorize(lambda xi: float(mp.hyp2f2(1, 1, mp.mpf(3)/2, 2, -xi**2)))
-    return vec(x)
-
-def upsilon_bar(x, a):
-    return ((np.sqrt(np.pi)/2) * x * erf(x) - 
-            (a * x**2 / np.sqrt(np.pi)) * hyp2f2_term(x) + 
-            ((1 - a**2)/2) * np.exp(-x**2))
-
 def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
-    # Read in first properties of file
     s = h5py.File(hdf5_file, 'r')
     header = dict(s['Header'].attrs)
     # Determine chunk boundaries
@@ -117,7 +105,7 @@ def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
     n_chunks = np.max([n // CHUNK_SIZE, 4])  # Number of chunks in each dimension
     chunk_size = n // n_chunks # For low-res
     n_degrade = TARGET_RESOLUTION // n  # Number of times the data was degraded
-    n_z = TARGET_DEPTH // n_degrade  # Number of redshift slices
+    nz = TARGET_DEPTH // n_degrade  # Number of redshift slices
     n_depth = DEPTH_SIZE // n_degrade  # Number of depth slices
     assert n_degrade > 0, f"n_degrade = {n_degrade}"
     assert n_degrade * n == TARGET_RESOLUTION, f"n_degrade * n = {n_degrade * n}, TARGET_RESOLUTION = {TARGET_RESOLUTION}"
@@ -127,13 +115,34 @@ def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
     assert 0 <= iy < n_chunks, f"iy = {iy}, n_chunks = {n_chunks}"
     x1, x2 = ix * chunk_size, (ix + 1) * chunk_size
     y1, y2 = iy * chunk_size, (iy + 1) * chunk_size
-    # Extract necessary parameters from the HDF5 file
+    # Extract necessary data and parameters from the HDF5 file
     h = header['HubbleParam']
     OmegaB = header['OmegaBaryon']
     Omega0 = header['Omega0']
     UnitVelocity_in_cm_per_s = header['UnitVelocity_in_cm_per_s']
     UnitLength_in_cm = header['UnitLength_in_cm']
     UnitMass_in_g = header['UnitMass_in_g']
+    Ts = s['Temperature'][x1:x2,y1:y2,:].astype(np.float64) # Gas temperature [K] #3D
+    zs = np.copy(s['Redshifts'])
+    densities = s['Density'][x1:x2,y1:y2,:].astype(np.float64)
+    x_HIs = 1. - s['HII_Fraction'][x1:x2,y1:y2,:].astype(np.float64) # Neutral hydrogen fraction [code units] #3D
+    v_cells_orig = s['Velocities'][x1:x2,y1:y2,:].astype(np.float64) # Gas velocity [code units] #3D
+    # Conversions
+    a_scale = 1. / (1. + zs[:-1])
+    velocity_to_cgs = (np.sqrt(a_scale) * UnitVelocity_in_cm_per_s)
+    length_to_cgs = a_scale * UnitLength_in_cm / h
+    volume_to_cgs = length_to_cgs**3
+    mass_to_cgs = UnitMass_in_g / h
+    density_to_cgs = mass_to_cgs / volume_to_cgs
+    # v_cells requires special care
+    opening_angle = float(header['OpeningAngle'])
+    nx, ny, nz = get_los_unit_vectors(n, opening_angle, x1=x1, x2=x2, y1=y1, y2=y2)
+    z1 = 0
+    z2 = z1 + v_cells_orig.shape[2]
+    v_cells_orig *= velocity_to_cgs[None, None, z1:z2, None]
+    v_cells_orig = (v_cells_orig[..., 0] * nx[:, :, None] + 
+               v_cells_orig[..., 1] * ny[:, :, None] +
+               v_cells_orig[..., 2] * nz[:, :, None])
     # Constants
     H0 = h * 100. * km / Mpc
     X = 0.76 # Hydrogen mass fraction
@@ -141,119 +150,75 @@ def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
     DnuL = 9.936e7 # Lyman-alpha natural line width
     nu0 = 2.466e15 # Lyman-alpha line frequency [Hz]
     n_freq = 801
-    # v_cells requires special care
-    opening_angle = float(header['OpeningAngle'])
-    nx, ny, nz = get_los_unit_vectors(n, opening_angle, x1=x1, x2=x2, y1=y1, y2=y2)
-    # Avoid reading all redshifts every time
+    # Derived quantities
+    n_H = X * densities * density_to_cgs / mH
+    Hz = H0 * np.sqrt(Omega0) * (1. + zs[:-1])**(3./2.) # Hubble parameter [s^-1] 
+    vth_orig = vth_div_sqrtT * np.sqrt(Ts) #3D
+    DvD = vth_orig * nu0 / c #3D
+    Ks_orig = Hz / vth_orig #3D
+    sigma0 = f12 * np.sqrt(np.pi) * ee**2 / (me * vth_orig * nu0) #3D
+    k0_orig = x_HIs * n_H * sigma0 #3D #fix n_H!!!!!
+    a_orig = DnuL / (2. * DvD) #3D
+    dls_orig = c * (zs[:-1] - zs[1:]) / Hz / (1. + zs[:-1]) # Comoving line element [cm]
+    zs_orig = zs[:-1]
     # Velocity offsets
     Dv_min_kms = -2000.
     Dv_max_kms = 2000.
-    Dvs = np.linspace(Dv_min_kms*km, Dv_max_kms*km, n_freq)[None, None, None, :] # Initial frequency offset [cm/s]
+    Dvs = np.linspace(Dv_min_kms*km, Dv_max_kms*km, n_freq)#[None, None, None, :] # Initial frequency offset [cm/s]
     num_freq_ranges = 5
     freq_range_edges = [-2000, -500, -100, 101, 501, 2001]
     freq_range_indices = [np.argmin(np.abs(Dvs - freq_range_edges[i]*km)) + int(np.round(i/num_freq_ranges)) 
                         for i in range(len(freq_range_edges))]
-    taus_z0_list = [] # [z0, x, y, band]
-    for iz0 in range(len(z0_list)):
-        taus_z0_list.append(np.zeros((CHUNK_SIZE, CHUNK_SIZE, n_freq)))
-    far_enough = False
-    for iz in reversed(range(DEPTH_FILES)): # Loop from front to back to avoid unnecessary depth
-        z1, z2 = iz * n_depth, np.min([n_z, (iz + 1) * n_depth])
-        with h5py.File(hdf5_file, 'r') as f:
-            zs = f['Redshifts'][z1:z2].astype(np.float64)
-            imax = np.argmax(zs < max(z0_list))
-            if (imax > 0):
-                z1 = imax-1
-                far_enough = True 
-            zs = zs[z1:]
-            Ts = f['Temperature'][x1:x2,y1:y2,z1:z2-1].astype(np.float64) # Gas temperature [K] #3D
-            densities = f['Density'][x1:x2,y1:y2,z1:z2-1].astype(np.float64)
-            x_HIs = 1. - f['HII_Fraction'][x1:x2,y1:y2,z1:z2-1].astype(np.float64) # Neutral hydrogen fraction [code units] #3D
-            v_cells = f['Velocities'][x1:x2,y1:y2,z1:z2-1].astype(np.float64) # Gas velocity [code units] #3D
-            # Conversions
-            a_scale = 1. / (1. + zs[:-1])
-            velocity_to_cgs = (np.sqrt(a_scale) * UnitVelocity_in_cm_per_s)
-            length_to_cgs = a_scale * UnitLength_in_cm / h
-            volume_to_cgs = length_to_cgs**3
-            mass_to_cgs = UnitMass_in_g / h
-            density_to_cgs = mass_to_cgs / volume_to_cgs
-            v_cells *= velocity_to_cgs[None, None, :, None]
-            v_cells = (v_cells[..., 0] * nx[:, :, None] + 
-                    v_cells[..., 1] * ny[:, :, None] +
-                    v_cells[..., 2] * nz[:, :, None])
-            # Derived quantities
-            n_H = X * densities * density_to_cgs / mH
-            Hz = H0 * np.sqrt(Omega0) * (1. + zs[:-1])**(3./2.) # Hubble parameter [s^-1] 
-            vth = vth_div_sqrtT * np.sqrt(Ts) #3D
-            DvD = vth * nu0 / c #3D
-            Ks = Hz / vth #3D
-            sigma0 = f12 * np.sqrt(np.pi) * ee**2 / (me * vth * nu0) #3D
-            k0 = x_HIs * n_H * sigma0 #3D #fix n_H!!!!!
-            a = DnuL / (2. * DvD) #3D
-            dls = c * (zs[:-1] - zs[1:]) / Hz / (1. + zs[:-1]) # Comoving line element [cm]
-            for iz0 in range(len(z0_list)): #z0_list in decreasing order
-                z0 = z0_list[iz0]
-                # Mask so that integration begins at the source
-                i0 = np.argmax(zs < z0)
-                if i0 > 0:
-                    i0 -= 1
-                zs = zs[i0:-1, None]
-                z0 = zs[0]
-                # zmids = zmids[i0:, None]
-                v_cells = v_cells[:,:,i0:, None]
-                dls = dls[i0:, None]
-                Ks = Ks[:,:,i0:, None]
-                k0 = k0[:,:,i0:, None]
-                vth = vth[:,:,i0:, None]
-                a = a[:,:,i0:, None]
-                # Band integration from Amualla+26
-                # tau_band_avgs = []
-                # for i_bin in range(num_freq_ranges):
-                #     i_freq_start = freq_range_indices[i_bin]
-                #     i_freq_range = freq_range_indices[i_bin+1] - freq_range_indices[i_bin]
-                #     # Calculate optical depths (vectorized)
-                #     Dvs_band = Dvs[None, None, None, i_freq_start:i_freq_start+i_freq_range]
-                #     Dv_zs = c * ((Dvs_band/c + 1) * (1 + z0)/(1 + zs) - 1)
-                #     x = -(Dv_zs + v_cells) / vth
-                #     # xstart, xend = x[0], x[-1]
-                #     # tau_band_avg = k0 / (Ks * np.abs(xend - xstart)) * (upsilon_bar(xend, a) - 
-                #     #                                                     upsilon_bar(xend - Ks*dls, a) -
-                #     #                                                     upsilon_bar(xstart, a) + 
-                #     #                                                     upsilon_bar(xstart - Ks*dls, a))
-                #     # tau_band_avgs.append(tau_band_avg)
-                #     dtau = (np.sqrt(np.pi) * k0 / (2 * Ks) * (erf(x) - erf(x - Ks*dls)) +
-                #             2 * a * k0 / (np.sqrt(np.pi) * Ks) * (dawsn(x - Ks*dls) - dawsn(x))) # [x, y, z, freq]
-                Dv_zs = c * ((Dvs/c + 1) * (1 + z0)/(1 + zs) - 1)
-                x = -(Dv_zs + v_cells) / vth
-                dtau = (np.sqrt(np.pi) * k0 / (2 * Ks) * (erf(x) - erf(x - Ks*dls)) + 
-                        2 * a * k0 / (np.sqrt(np.pi) * Ks) * (dawsn(x - Ks*dls) - dawsn(x))) # [x, y, z, freq]
-                taus_z0_list[iz0] += np.sum(dtau, axis=2)
-        if far_enough:
-            break
-        # Now you can take band averages
-        for iz0 in range(z0_list):
-            taus_z0 = taus_z0_list[iz0]
-            transmissions_z0 = np.zeros((num_freq_ranges, CHUNK_SIZE, CHUNK_SIZE))
-            for i_bin in range(num_freq_ranges):
-                i_freq_start = freq_range_indices[i_bin]
-                i_freq_range = freq_range_indices[i_bin+1] - freq_range_indices[i_bin]
-                transmissions_z0[i_bin,:,:] = np.sum(np.exp(-taus_z0[:,:,i_freq_start:i_freq_start+i_freq_range]), axis=-1) / i_freq_range
-            taus_band_avg_z0 = np.log(transmissions_z0)
-             # Create file
-            with h5py.File(os.path.join(dir_path, f'tau_map_{z0}_{chunk}.hdf5'), 'w') as f:
-                f.attrs['HubbleParam'] = h
-                f.attrs['NumFreq'] = np.int32(n_freq)
-                f.attrs['Dv_min'] = Dv_min_kms
-                f.attrs['Dv_max'] = Dv_max_kms
-                f.attrs['Dv_local'] = 0
-                f.attrs['Omega0'] = Omega0
-                f.attrs['OmegaBaryon'] = OmegaB
-                f.attrs['Redshift'] = z0
-                f.attrs['Chunk'] = chunk
-                f.create_dataset('tau_band_avgs', data=taus_band_avg_z0)
-                f.create_dataset('Dvs', data=Dvs)
-                f.create_dataset('freq_band_edges', data=freq_range_edges)
-    return #Dvs, taus
+    for z0 in z0_list:
+        subdir = f'z0={z0}'
+        if not os.path.exists(os.path.join(dir_path, subdir)):
+            os.makedirs(os.path.join(dir_path, subdir))
+        filename = f'tau_map_{z0}_{chunk}.hdf5'
+        # Mask so that integration begins at the source
+        i0 = np.argmax(zs < z0)
+        if i0 > 0:
+            i0 -= 1
+        zs = zs_orig[i0:, None]
+        z0 = zs[0]
+        v_cells = v_cells_orig[:,:,i0:, None]
+        dls = dls_orig[i0:, None]
+        Ks = Ks_orig[:,:,i0:, None]
+        k0 = k0_orig[:,:,i0:, None]
+        vth = vth_orig[:,:,i0:, None]
+        a = a_orig[:,:,i0:, None]
+        tau_band_avgs = []
+        for i_bin in range(num_freq_ranges):
+            i_freq_start = freq_range_indices[i_bin]
+            i_freq_range = freq_range_indices[i_bin+1] - freq_range_indices[i_bin]
+            # Calculate optical depths (vectorized)
+            Dvs_band = Dvs[None, None, None, i_freq_start:i_freq_start+i_freq_range]
+            Dv_zs = c * ((Dvs_band/c + 1) * (1 + z0)/(1 + zs) - 1)
+            x = -(Dv_zs + v_cells) / vth
+            dtau = (np.sqrt(np.pi) * k0 / (2 * Ks) * (erf(x) - erf(x - Ks*dls)) +
+                    2 * a * k0 / (np.sqrt(np.pi) * Ks) * (dawsn(x - Ks*dls) - dawsn(x))) # [x, y, z, freq]
+            taus = np.sum(dtau, axis=2) # [x, y, freq]
+            # Transform to transmission space
+            transmissions = np.exp(-taus)
+            # Take band averages
+            transmission_band_avg = np.sum(transmissions, axis=-1) / i_freq_range # [x, y]
+            # Back to tau space
+            tau_band_avg = np.log(transmission_band_avg)
+            tau_band_avgs.append(tau_band_avg) # tau_band_avgs: [band, x, y]
+        # Create file
+        with h5py.File(os.path.join(dir_path, subdir, filename), 'w') as f:
+            f.attrs['HubbleParam'] = h
+            f.attrs['NumFreq'] = np.int32(n_freq)
+            f.attrs['Dv_min'] = Dv_min_kms
+            f.attrs['Dv_max'] = Dv_max_kms
+            f.attrs['Dv_local'] = 0
+            f.attrs['Omega0'] = Omega0
+            f.attrs['OmegaBaryon'] = OmegaB
+            f.attrs['Redshift'] = z0
+            f.attrs['Chunk'] = chunk
+            f.create_dataset('tau_band_avgs', data=tau_band_avgs)
+            f.create_dataset('Dvs', data=Dvs)
+            f.create_dataset('freq_band_edges', data=freq_range_edges)
+    return Dvs, taus
 # store band-average tau maps for every half-integer redshift from 3 to 12
 
 def parse_args():
@@ -306,13 +271,13 @@ def main():
     hdf5_file = args.hdf5_file
     with open(args.z0_file, 'r') as f:
         z0_list = [float(line.strip()) for line in f if line.strip()]
-    z0_list = z0_list.sort(reverse=True)
+    z0_list.sort(reverse=True)
 
     if not os.path.exists(hdf5_file):
         print(f"Error: HDF5 file not found: {hdf5_file}", file=sys.stderr)
         sys.exit(1)
     
-    dir_path = "tau_maps"
+    dir_path = f"tau_maps_{len(z0_list)}"
     save_dir_arg = args.save_dir
     if save_dir_arg is not None:
         dir_path = os.path.join(save_dir_arg, dir_path)
