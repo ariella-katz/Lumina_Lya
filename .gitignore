@@ -65,3 +65,4 @@ Thumbs.db
 # ===== Large input data (if symlinked or copied locally) =====
 # Uncomment if your lightcone files (e.g. All_40.hdf5) live inside the repo dir
 # All_*.hdf5
+Lya-env/
