@@ -42,12 +42,12 @@ def transmission_integrated_z0(z0_ss):
     T_int_center[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_0[2])
     T_int_red[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_0[3])
     T_int_ultrared[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_0[4])
-    for chunk in range(1, n_chunks):
+    for chunk in range(1, len(z0_ss)):
         s_chunk = z0_ss[chunk]
-        chunk_num = s_chunk.attrs['Chunk']
+        chunk_num = int(s_chunk.attrs['Chunk'])
         tau_band_avgs_chunk = s_chunk['tau_band_avgs'][:]
-        x1 = chunk_size * (chunk_num % n_chunks)
-        y1 = chunk_size * (chunk_num // n_chunks)
+        x1 = chunk_size * (chunk_num // n_chunks)
+        y1 = chunk_size * (chunk_num % n_chunks)
         T_int_ultrablue[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_chunk[0])
         T_int_blue[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_chunk[1])
         T_int_center[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_chunk[2])
@@ -60,7 +60,7 @@ def transmission_integrated_z0_unbanded(z0_ss):
     n_chunks = int(np.sqrt(len(z0_ss)))
     s0 = z0_ss[0]
     z0 = float(np.asarray(s0.attrs['Redshift']).squeeze())
-    chunk_size = s0.attrs['ChunkSize']
+    chunk_size = int(s0.attrs['ChunkSize'])
     T_int_ultrablue = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
     T_int_blue = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
     T_int_center = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
@@ -76,7 +76,7 @@ def transmission_integrated_z0_unbanded(z0_ss):
     T_int_center[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_center_0
     T_int_red[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_red_0
     T_int_ultrared[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_ultrared_0
-    for chunk in range(1, n_chunks):
+    for chunk in range(1, len(z0_ss)):
         s_chunk = z0_ss[chunk]
         _, T_int_ultrablue_chunk, T_int_blue_chunk, T_int_center_chunk, T_int_red_chunk, T_int_ultrared_chunk = transmission_integrated_z0_old(s_chunk)
         chunk_num = s_chunk.attrs['Chunk']
