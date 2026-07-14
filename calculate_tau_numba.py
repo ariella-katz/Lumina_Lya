@@ -304,7 +304,7 @@ def main():
         print(f"Error: HDF5 file not found: {hdf5_file}", file=sys.stderr)
         sys.exit(1)
     
-    dir_path = f"tau_maps_{len(z0_list)}"
+    dir_path = f"tau_maps_{len(z0_list)}_numba"
     save_dir_arg = args.save_dir
     if save_dir_arg is not None:
         dir_path = os.path.join(save_dir_arg, dir_path)

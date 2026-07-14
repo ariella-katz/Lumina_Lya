@@ -53,7 +53,7 @@ def main():
         z_spread = np.linspace(z0, np.max([CUTOFF, z0 - spread_depth]), spread_num)
         z0_spread_list.append(z_spread)
 
-    with open('z0_spreads.txt', 'w') as f:
+    with open('z0_list.txt', 'w') as f:
         for z_spread in z0_spread_list:
             line = ','.join(f'{z:.4f}' for z in z_spread)
             f.write(line + '\n')
