@@ -88,7 +88,7 @@ def plot_tau_maps(ss):
             ax = axes[row, col]
             ax.imshow(tau_map, cmap=cmap, norm=norm, origin='lower',
                       extent=[-half_fov, half_fov, -half_fov, half_fov])
-            ax.grid(True, color='black', alpha=0.2, linewidth=0.5, linestyle='-')
+            ax.grid(True, color='white', alpha=0.5, linewidth=0.5, linestyle='-')
             ax.xaxis.set_major_locator(MaxNLocator(nbins=5))
             ax.yaxis.set_major_locator(MaxNLocator(nbins=5))
             if col == 0:
@@ -106,7 +106,7 @@ def plot_tau_maps(ss):
     fig.subplots_adjust(top=0.90, wspace=0.05, hspace=0.05)
     for j in range(5):
         pos = axes[0, j].get_position()
-        cax = fig.add_axes([pos.x0, 0.93, pos.width, 0.008])
+        cax = fig.add_axes([pos.x0, 0.93, pos.width, 0.005])
         cb = fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=band_cmaps[j]),
                           cax=cax, orientation='horizontal', label=r'$\tau$')
         cb.ax.tick_params(labelsize=7)
