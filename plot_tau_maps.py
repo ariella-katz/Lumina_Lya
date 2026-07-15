@@ -92,11 +92,16 @@ def plot_tau_maps(ss):
             ax.xaxis.set_major_locator(MaxNLocator(nbins=5))
             ax.yaxis.set_major_locator(MaxNLocator(nbins=5))
             if col == 0:
-                ax.set_ylabel(f'z={z0:.1f}', fontsize=10)
+                ax.set_ylabel(r'$\Delta\Theta$ [degrees]', fontsize=9)
+                ax.text(0.05, 0.95, f'$z_0$={z0:.1f}',
+                        transform=ax.transAxes, ha='left', va='top',
+                        fontsize=10, color='white',
+                        bbox=dict(boxstyle='round,pad=0.25',
+                                facecolor='black', edgecolor='none', alpha=0.6))
             if row == 0:
                 ax.set_title(band_labels[col], fontsize=11)
             if row == 7:
-                ax.set_xlabel(r'$\Delta\Theta$ [degrees]')
+                ax.set_xlabel(r'$\Delta\Theta$ [degrees]', fontsize=9)
 
     fig.subplots_adjust(top=0.90, wspace=0.05, hspace=0.05)
     for j in range(5):
