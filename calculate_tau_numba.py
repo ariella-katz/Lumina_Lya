@@ -101,7 +101,7 @@ def project_los_velocity(vel, s, nx, ny, nz, z1=0):
     )
 
 @njit(parallel=True)
-def calc_dtaus(k0, Ks, x, dls, a, dtaus_out):
+def calc_dtaus(k0, Ks, x, dls, a, taus_out):
     nx, ny, nz, nf = x.shape
     for ix in prange(nx):
         for iy in range(ny):
@@ -117,8 +117,9 @@ def calc_dtaus(k0, Ks, x, dls, a, dtaus_out):
                     d1 = dawsn(xi - Ksi*dlsi)
                     d2 = dawsn(xi)
                     sqrtpi = math.sqrt(math.pi)
-                    dtaus_out[ix,iy,iz,jf] = ((sqrtpi * k0i / (2 * Ksi) * (e1 - e2)) +
+                    dtau = ((sqrtpi * k0i / (2 * Ksi) * (e1 - e2)) +
                                               2 * ai * k0i / (sqrtpi * Ksi) * (d1 - d2))
+                    taus_out[ix, iy, jf] += dtau
 
 def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
     s = h5py.File(hdf5_file, 'r')
@@ -220,9 +221,13 @@ def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
             x = -(Dv_zs + v_cells) / vth
             # dtau = (np.sqrt(np.pi) * k0 / (2 * Ks) * (erf(x) - erf(x - Ks*dls)) +
             #         2 * a * k0 / (np.sqrt(np.pi) * Ks) * (dawsn(x - Ks*dls) - dawsn(x))) # [x, y, z, freq]
-            dtaus = np.zeros((chunk_size, chunk_size, len(zs), i_freq_range))
-            calc_dtaus(k0, Ks, x, dls, a, dtaus)
-            taus = np.sum(dtaus, axis=2) # [x, y, freq]
+            # dtaus = np.zeros((chunk_size, chunk_size, len(zs), i_freq_range))
+            taus = np.zeros((chunk_size, chunk_size, i_freq_range))
+            # print(x.shape)
+            # print(taus.shape)
+            calc_dtaus(k0, Ks, x, dls, a, taus)
+            # print(taus.shape)
+            # taus = np.sum(dtaus, axis=2) # [x, y, freq]
             # Transform to transmission space
             transmissions = np.exp(-taus)
             # Take band averages
@@ -320,7 +325,17 @@ def main():
     # with Pool(processes=64) as pool:
     #     pool.starmap(calculate_tau_edges, [(hdf5_file, z0, dir_path, chunk) for chunk in range(n_chunks*n_chunks)])
 
+    import cProfile
+    import pstats
+    calculate_tau_edges(hdf5_file, z0_list[:1], dir_path, chunk)
+    profiler = cProfile.Profile()
+    profiler.enable()
     calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk)
+    profiler.disable()
+
+    stats = pstats.Stats(profiler).sort_stats('cumulative')
+    stats.print_stats(20)
+    # calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk)
 
 
 if __name__ == "__main__":

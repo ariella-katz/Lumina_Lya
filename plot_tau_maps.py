@@ -143,7 +143,8 @@ def main():
 
     # Group files by z0
     # Want the list of 8 z0s
-    assert len(os.listdir(data_dir)) == 8, "Must calculate from list of 8 z0s."
+    num_z0s = str(len(os.listdir(data_dir)))
+    assert len(os.listdir(data_dir)) == 8, f'Must calculate from list of 8 z0s. Num z0s: {num_z0s}'
     ss = []
     for z0_name in sorted(os.listdir(data_dir)):
         z0_dir = os.path.join(data_dir, z0_name)
