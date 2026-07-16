@@ -27,7 +27,8 @@ HYDROGEN_MASSFRAC = 0.76    # Mass fraction of hydrogen
 GAMMA = 5. / 3.             # Adiabatic index of simulated gas
 GAMMA_MINUS1 = GAMMA - 1.   # For convenience
 
-CHUNK_SIZE = 128  # Chunk size
+# CHUNK_SIZE = 128  # Chunk size
+CHUNK_SIZE = 80
 DEPTH_SIZE = 8192  # Depth size
 TARGET_RESOLUTION = 5120  # Target resolution
 TARGET_DEPTH = 32081  # Target depth
