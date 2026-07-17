@@ -163,7 +163,7 @@ def plot_T_power_spectra(ss):
 
             if row == 0:
                 secax.set_xlabel("Angular scale [deg]")
-                ax.set_title(band_labels[col], fontsize=11)
+                ax.set_title(band_labels[col], fontsize=12)
             else:
                 secax.set_xlabel("")
                 # hide the tick labels but keep the ticks
