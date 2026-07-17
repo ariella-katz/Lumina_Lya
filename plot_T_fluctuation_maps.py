@@ -70,7 +70,7 @@ def plot_T_maps(ss):
             ax = axes[row, col]
             im = ax.imshow(T_fluc_map, cmap=cmap, origin='lower', vmin=vmin, vmax=vmax,
                       extent=[-half_fov, half_fov, -half_fov, half_fov])
-            ax.grid(True, color='white', alpha=0.5, linewidth=0.5, linestyle='-')
+            ax.grid(True, color='black', alpha=0.5, linewidth=0.5, linestyle='-')
             ax.xaxis.set_major_locator(MaxNLocator(nbins=5))
             ax.yaxis.set_major_locator(MaxNLocator(nbins=5))
             if col == 0:
@@ -91,14 +91,6 @@ def plot_T_maps(ss):
     cax = fig.add_axes([pos0.x0, 0.94, pos4.x1 - pos0.x0, 0.005])
     cb = fig.colorbar(im, ax=axes, cax=cax, orientation='horizontal',
                       label=rf'$(\mathcal{{T}}_\text{{int}} - \langle\mathcal{{T}}_\text{{int}}\rangle)/\sigma_{{\mathcal{{T}}_\text{{int}}}}$')
-    # for j in range(5):
-    #     pos = axes[0, j].get_position()
-    #     cax = fig.add_axes([pos.x0, 0.93, pos.width, 0.005])
-    #     cb = fig.colorbar(plt.cm.ScalarMappable(cmap='coolwarm'),
-    #                       cax=cax, orientation='horizontal', 
-    #                       label=rf'$(\mathcal{{T}}_\text{{int}} - \langle\mathcal{{T}}_\text{{int}}\rangle)/\sigma_{{\mathcal{{T}}_\text{{int}}}}$')
-    #     cb.ax.tick_params(labelsize=7)
-    #     cb.ax.xaxis.set_ticks_position('top')
 
     plt.savefig('T_fluc_maps_grid.png', dpi=200, bbox_inches='tight')
 
