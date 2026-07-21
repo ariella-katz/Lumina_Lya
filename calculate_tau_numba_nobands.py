@@ -326,8 +326,16 @@ def main():
     # with Pool(processes=64) as pool:
     #     pool.starmap(calculate_tau_edges, [(hdf5_file, z0, dir_path, chunk) for chunk in range(n_chunks*n_chunks)])
 
+    import cProfile
+    import pstats
+    calculate_tau_edges(hdf5_file, z0_list[:1], dir_path, chunk)
+    profiler = cProfile.Profile()
+    profiler.enable()
     calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk)
+    profiler.disable()
 
+    stats = pstats.Stats(profiler).sort_stats('cumulative')
+    stats.print_stats(20)
     # calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk)
 
 

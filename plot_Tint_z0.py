@@ -28,6 +28,7 @@ def transmission_integrated_z0(z0_ss):
     z0 = float(np.asarray(s0.attrs['Redshift']).squeeze())
     tau_band_avgs_0 = s0['tau_band_avgs'][:]
     chunk_size = tau_band_avgs_0.shape[1]
+    print(chunk_size)
     T_int_ultrablue = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
     T_int_blue = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
     T_int_center = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
@@ -46,6 +47,7 @@ def transmission_integrated_z0(z0_ss):
         s_chunk = z0_ss[chunk]
         chunk_num = int(s_chunk.attrs['Chunk'])
         tau_band_avgs_chunk = s_chunk['tau_band_avgs'][:]
+        print(tau_band_avgs_chunk.shape)
         x1 = chunk_size * (chunk_num // n_chunks)
         y1 = chunk_size * (chunk_num % n_chunks)
         T_int_ultrablue[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_chunk[0])
@@ -147,7 +149,7 @@ def plot_Tint(ss):
     linax.set_ylim(0.1,1)
     linax.set_xlim(6,13)
     linax.set_ylabel(rf'$\mathcal{{T}}^\text{{int}}$')
-    linax.legend(ncols=3, bbox_to_anchor=(0, 1), loc='lower left', fontsize='small')
+    # linax.legend(ncols=3, bbox_to_anchor=(0, 1), loc='lower left', fontsize='small')
     logax.plot(z0s, np.log10(10e-12 + mean_ultrablue), color='blue', label='ultrablue, mean')
     logax.fill_between(z0s, np.log10(10e-12 + mean_ultrablue + sig_ultrablue), np.log10(np.max([np.zeros(n)+10e-12, mean_ultrablue - sig_ultrablue], axis=0)), color='blue', alpha=0.2)
     logax.plot(z0s, np.log10(10e-12 + med_ultrablue), color='blue', linestyle='dashed', label='ultrablue, median')
@@ -166,7 +168,9 @@ def plot_Tint(ss):
     logax.set_ylim(-7, -1)
     logax.set_ylabel(rf'$\log\mathcal{{T}}^\text{{int}}$')
     logax.set_xlabel(rf'$z_0$')
-    plt.savefig('Tint_z0.png')
+    handles, labels = linax.get_legend_handles_labels()
+    fig.legend(handles, labels, bbox_to_anchor=(1.0, 0.5), loc='center left', fontsize='small')
+    plt.savefig('Tint_z0.png',bbox_inches='tight')
 
 def parse_args():
     parser = argparse.ArgumentParser(
