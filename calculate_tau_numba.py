@@ -102,8 +102,9 @@ def project_los_velocity(vel, s, nx, ny, nz, z1=0):
     )
 
 @njit(parallel=True)
-def calc_dtaus(k0, Ks, x, dls, a, taus_out):
+def calc_dtaus(k0, Ks, x, dls, a, vth, v_cells, zs, z0, Dvs_band, taus_out):
     nx, ny, nz, nf = x.shape
+    nf = Dvs_band.shape[0]
     for ix in prange(nx):
         for iy in range(ny):
             for iz in range(nz):
@@ -111,8 +112,13 @@ def calc_dtaus(k0, Ks, x, dls, a, taus_out):
                 Ksi = Ks[ix, iy, iz, 0]
                 dlsi = dls[iz, 0]
                 ai = a[ix, iy, iz, 0]
+                vthi = vth[ix, iy, iz, 0]
+                v_cellsi = v_cells[ix, iy, iz, 0]
+                zsi = zs[iz, 0]
+                sqrtpi = math.sqrt(math.pi)
                 for jf in range(nf):
-                    xi = x[ix, iy, iz, jf]
+                    Dv_z = c * ((Dvs_band[jf]/c + 1) * (1 + z0) / (1 + zsi) - 1)
+                    xi = -(Dv_z + v_cellsi) / vthi
                     e1 = math.erf(xi)
                     e2 = math.erf(xi - Ksi*dlsi)
                     d1 = dawsn(xi - Ksi*dlsi)
@@ -217,16 +223,16 @@ def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
             i_freq_start = freq_range_indices[i_bin]
             i_freq_range = freq_range_indices[i_bin+1] - freq_range_indices[i_bin]
             # Calculate optical depths (vectorized)
-            Dvs_band = Dvs[None, None, None, i_freq_start:i_freq_start+i_freq_range]
-            Dv_zs = c * ((Dvs_band/c + 1) * (1 + z0)/(1 + zs) - 1)
-            x = -(Dv_zs + v_cells) / vth
+            Dvs_band = Dvs[i_freq_start:i_freq_start+i_freq_range]
+            # Dv_zs = c * ((Dvs_band/c + 1) * (1 + z0)/(1 + zs) - 1)
+            # x = -(Dv_zs + v_cells) / vth
             # dtau = (np.sqrt(np.pi) * k0 / (2 * Ks) * (erf(x) - erf(x - Ks*dls)) +
             #         2 * a * k0 / (np.sqrt(np.pi) * Ks) * (dawsn(x - Ks*dls) - dawsn(x))) # [x, y, z, freq]
             # dtaus = np.zeros((chunk_size, chunk_size, len(zs), i_freq_range))
             taus = np.zeros((chunk_size, chunk_size, i_freq_range))
             # print(x.shape)
             # print(taus.shape)
-            calc_dtaus(k0, Ks, x, dls, a, taus)
+            calc_dtaus(k0, Ks, dls, a, vth, v_cells, zs, z0, Dvs_band, taus)
             # print(taus.shape)
             # taus = np.sum(dtaus, axis=2) # [x, y, freq]
             # Transform to transmission space
