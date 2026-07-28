@@ -24,71 +24,69 @@ def transmission_integrated_z0_old(s):
 def transmission_integrated_z0(z0_ss):
     "Takes in a file created by calculate_tau.py, which includes z0, taus, transmission, Dvs"
     n_chunks = int(np.sqrt(len(z0_ss)))
-    s0 = z0_ss[0]
-    z0 = float(np.asarray(s0.attrs['Redshift']).squeeze())
-    tau_band_avgs_0 = s0['tau_band_avgs'][:]
-    chunk_size = tau_band_avgs_0.shape[1]
-    print(chunk_size)
-    T_int_ultrablue = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
-    T_int_blue = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
-    T_int_center = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
-    T_int_red = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
-    T_int_ultrared = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
-    ix1 = 0
-    iy1 = 0
-    x1 = ix1 * chunk_size
-    y1 = iy1 * chunk_size
-    T_int_ultrablue[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_0[0])
-    T_int_blue[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_0[1])
-    T_int_center[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_0[2])
-    T_int_red[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_0[3])
-    T_int_ultrared[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_0[4])
+    with h5py.File(z0_ss[0], 'r') as s0:
+        z0 = float(np.asarray(s0.attrs['Redshift']).squeeze())
+        tau_band_avgs_0 = s0['tau_band_avgs'][:]
+        chunk_size = tau_band_avgs_0.shape[1]
+        T_int_ultrablue = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
+        T_int_blue = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
+        T_int_center = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
+        T_int_red = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
+        T_int_ultrared = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
+        ix1 = 0
+        iy1 = 0
+        x1 = ix1 * chunk_size
+        y1 = iy1 * chunk_size
+        T_int_ultrablue[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_0[0])
+        T_int_blue[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_0[1])
+        T_int_center[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_0[2])
+        T_int_red[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_0[3])
+        T_int_ultrared[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_0[4])
     for chunk in range(1, len(z0_ss)):
-        s_chunk = z0_ss[chunk]
-        chunk_num = int(s_chunk.attrs['Chunk'])
-        tau_band_avgs_chunk = s_chunk['tau_band_avgs'][:]
-        print(tau_band_avgs_chunk.shape)
-        x1 = chunk_size * (chunk_num // n_chunks)
-        y1 = chunk_size * (chunk_num % n_chunks)
-        T_int_ultrablue[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_chunk[0])
-        T_int_blue[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_chunk[1])
-        T_int_center[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_chunk[2])
-        T_int_red[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_chunk[3])
-        T_int_ultrared[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_chunk[4])
+        with h5py.File(z0_ss[chunk], 'r') as s_chunk:
+            chunk_num = int(s_chunk.attrs['Chunk'])
+            tau_band_avgs_chunk = s_chunk['tau_band_avgs'][:]
+            x1 = chunk_size * (chunk_num // n_chunks)
+            y1 = chunk_size * (chunk_num % n_chunks)
+            T_int_ultrablue[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_chunk[0])
+            T_int_blue[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_chunk[1])
+            T_int_center[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_chunk[2])
+            T_int_red[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_chunk[3])
+            T_int_ultrared[x1:x1+chunk_size,y1:y1+chunk_size] = np.exp(-tau_band_avgs_chunk[4])
     return z0, T_int_ultrablue, T_int_blue, T_int_center, T_int_red, T_int_ultrared
 
 def transmission_integrated_z0_unbanded(z0_ss):
     "Takes in a file created by calculate_tau.py, which includes z0, taus, transmission, Dvs"
     n_chunks = int(np.sqrt(len(z0_ss)))
-    s0 = z0_ss[0]
-    z0 = float(np.asarray(s0.attrs['Redshift']).squeeze())
-    chunk_size = int(s0.attrs['ChunkSize'])
-    T_int_ultrablue = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
-    T_int_blue = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
-    T_int_center = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
-    T_int_red = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
-    T_int_ultrared = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
-    ix1 = 0
-    iy1 = 0
-    x1 = ix1 * chunk_size
-    y1 = iy1 * chunk_size
-    _, T_int_ultrablue_0, T_int_blue_0, T_int_center_0, T_int_red_0, T_int_ultrared_0 = transmission_integrated_z0_old(z0_ss[0])
-    T_int_ultrablue[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_ultrablue_0
-    T_int_blue[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_blue_0
-    T_int_center[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_center_0
-    T_int_red[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_red_0
-    T_int_ultrared[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_ultrared_0
+    with h5py.File(z0_ss[0], 'r') as s0:
+        z0 = float(np.asarray(s0.attrs['Redshift']).squeeze())
+        chunk_size = int(s0.attrs['ChunkSize'])
+        T_int_ultrablue = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
+        T_int_blue = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
+        T_int_center = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
+        T_int_red = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
+        T_int_ultrared = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
+        ix1 = 0
+        iy1 = 0
+        x1 = ix1 * chunk_size
+        y1 = iy1 * chunk_size
+        _, T_int_ultrablue_0, T_int_blue_0, T_int_center_0, T_int_red_0, T_int_ultrared_0 = transmission_integrated_z0_old(z0_ss[0])
+        T_int_ultrablue[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_ultrablue_0
+        T_int_blue[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_blue_0
+        T_int_center[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_center_0
+        T_int_red[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_red_0
+        T_int_ultrared[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_ultrared_0
     for chunk in range(1, len(z0_ss)):
-        s_chunk = z0_ss[chunk]
-        _, T_int_ultrablue_chunk, T_int_blue_chunk, T_int_center_chunk, T_int_red_chunk, T_int_ultrared_chunk = transmission_integrated_z0_old(s_chunk)
-        chunk_num = s_chunk.attrs['Chunk']
-        x1 = chunk_size * (chunk_num // n_chunks)
-        y1 = chunk_size * (chunk_num % n_chunks)
-        T_int_ultrablue[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_ultrablue_chunk
-        T_int_blue[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_blue_chunk
-        T_int_center[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_center_chunk
-        T_int_red[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_red_chunk
-        T_int_ultrared[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_ultrared_chunk
+        with h5py.File(z0_ss[chunk], 'r') as s_chunk:
+            _, T_int_ultrablue_chunk, T_int_blue_chunk, T_int_center_chunk, T_int_red_chunk, T_int_ultrared_chunk = transmission_integrated_z0_old(s_chunk)
+            chunk_num = s_chunk.attrs['Chunk']
+            x1 = chunk_size * (chunk_num // n_chunks)
+            y1 = chunk_size * (chunk_num % n_chunks)
+            T_int_ultrablue[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_ultrablue_chunk
+            T_int_blue[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_blue_chunk
+            T_int_center[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_center_chunk
+            T_int_red[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_red_chunk
+            T_int_ultrared[x1:x1+chunk_size,y1:y1+chunk_size] = T_int_ultrared_chunk
     return z0, T_int_ultrablue, T_int_blue, T_int_center, T_int_red, T_int_ultrared
 
 def plot_Tint(ss):
@@ -131,46 +129,51 @@ def plot_Tint(ss):
     sig_ultrared = np.std(T_ints_ultrared, axis=(1,2))
     fig, (linax, logax) = plt.subplots(2, 1, sharex = True)
     fig.subplots_adjust(hspace=0)
-    linax.plot(z0s, mean_ultrablue, color='blue', label='ultrablue, mean')
+    linax.plot(z0s, mean_ultrablue, color='blue', label='Ultrablue,\nmean')
     linax.fill_between(z0s, mean_ultrablue + sig_ultrablue, mean_ultrablue - sig_ultrablue, color='blue', alpha=0.2)
     linax.plot(z0s, med_ultrablue, color='blue', linestyle='dashed') #, label='ultrablue, median')
-    linax.plot(z0s, mean_blue, color='green', label='blue, mean')
+    linax.plot(z0s, mean_blue, color='green', label='Blue,\nmean')
     linax.fill_between(z0s, mean_blue + sig_blue, mean_blue - sig_blue, color='green', alpha=0.2)
     linax.plot(z0s, med_blue, color='green', linestyle='dashed') #, label='blue, median')
-    linax.plot(z0s, mean_center, color='brown', label='center, mean')
+    linax.plot(z0s, mean_center, color='brown', label='Center,\nmean')
     linax.fill_between(z0s, mean_center + sig_center, mean_center - sig_center, color='brown', alpha=0.2)
     linax.plot(z0s, med_center, color='brown', linestyle='dashed') #, label='center, median')
-    linax.plot(z0s, mean_red, color='orange', label='red, mean')
+    linax.plot(z0s, mean_red, color='orange', label='Red,\nmean')
     linax.fill_between(z0s, mean_red + sig_red, mean_red - sig_red, color='orange', alpha=0.2)
     linax.plot(z0s, med_red, color='orange', linestyle='dashed') #, label='red, median')
-    linax.plot(z0s, mean_ultrared, color='red', label='ultrared, mean')
+    linax.plot(z0s, mean_ultrared, color='red', label='Ultrared,\nmean')
     linax.fill_between(z0s, mean_ultrared + sig_ultrared, mean_ultrared - sig_ultrared, color='red', alpha=0.2)
     linax.plot(z0s, med_ultrared, color='red', linestyle='dashed', label='median') #, label='ultrared, median')
     linax.set_ylim(0.1,1)
     linax.set_xlim(6,13)
-    linax.set_ylabel(rf'$\mathcal{{T}}^\text{{int}}$')
+    linax.set_ylabel(rf'$\mathcal{{T}}^\text{{int}}$', size='large')
     # linax.legend(ncols=3, bbox_to_anchor=(0, 1), loc='lower left', fontsize='small')
-    logax.plot(z0s, np.log10(10e-12 + mean_ultrablue), color='blue', label='ultrablue, mean')
+    logax.plot(z0s, np.log10(10e-12 + mean_ultrablue), color='blue', label='Ultrablue, mean')
     logax.fill_between(z0s, np.log10(10e-12 + mean_ultrablue + sig_ultrablue), np.log10(np.max([np.zeros(n)+10e-12, mean_ultrablue - sig_ultrablue], axis=0)), color='blue', alpha=0.2)
-    logax.plot(z0s, np.log10(10e-12 + med_ultrablue), color='blue', linestyle='dashed', label='ultrablue, median')
-    logax.plot(z0s, np.log10(10e-12 + mean_blue), color='green', label='blue, mean')
+    logax.plot(z0s, np.log10(10e-12 + med_ultrablue), color='blue', linestyle='dashed', label='Ultrablue, median')
+    logax.plot(z0s, np.log10(10e-12 + mean_blue), color='green', label='Blue, mean')
     logax.fill_between(z0s, np.log10(10e-12 + mean_blue + sig_blue), np.log10(np.max([np.zeros(n)+10e-12, mean_blue - sig_blue], axis=0)), color='green', alpha=0.2)
-    logax.plot(z0s, np.log10(10e-12 + med_blue), color='green', linestyle='dashed', label='blue, median')
-    logax.plot(z0s, np.log10(10e-12 + mean_center), color='brown', label='center, mean')
+    logax.plot(z0s, np.log10(10e-12 + med_blue), color='green', linestyle='dashed', label='Blue, median')
+    logax.plot(z0s, np.log10(10e-12 + mean_center), color='brown', label='Center, mean')
     logax.fill_between(z0s, np.log10(10e-12 + mean_center + sig_center), np.log10(np.max([np.zeros(n)+10e-12, mean_center - sig_center], axis=0)), color='brown', alpha=0.2)
-    logax.plot(z0s, np.log10(10e-12 + med_center), color='brown', linestyle='dashed', label='center, median')
-    logax.plot(z0s, np.log10(10e-12 + mean_red), color='orange', label='red, mean')
+    logax.plot(z0s, np.log10(10e-12 + med_center), color='brown', linestyle='dashed', label='Center, median')
+    logax.plot(z0s, np.log10(10e-12 + mean_red), color='orange', label='Red, mean')
     logax.fill_between(z0s, np.log10(10e-12 + mean_red + sig_red), np.log10(np.max([np.zeros(n)+10e-12, mean_red - sig_red], axis=0)), color='orange', alpha=0.2)
-    logax.plot(z0s, np.log10(10e-12 + med_red), color='orange', linestyle='dashed', label='red, median')
-    logax.plot(z0s, np.log10(10e-12 + mean_ultrared), color='red', label='ultrared, mean')
+    logax.plot(z0s, np.log10(10e-12 + med_red), color='orange', linestyle='dashed', label='Red, median')
+    logax.plot(z0s, np.log10(10e-12 + mean_ultrared), color='red', label='Ultrared, mean')
     logax.fill_between(z0s, np.log10(10e-12 + mean_ultrared + sig_ultrared), np.log10(np.max([np.zeros(n)+10e-12, mean_ultrared - sig_ultrared], axis=0)), color='red', alpha=0.2)
-    logax.plot(z0s, np.log10(10e-12 + med_ultrared), color='red', linestyle='dashed', label='ultrared, median')
+    logax.plot(z0s, np.log10(10e-12 + med_ultrared), color='red', linestyle='dashed', label='Ultrared, median')
     logax.set_ylim(-7, -1)
-    logax.set_ylabel(rf'$\log\mathcal{{T}}^\text{{int}}$')
+    logax.set_ylabel(rf'$\log\mathcal{{T}}^\text{{int}}$', size='large')
     logax.set_xlabel(rf'$z_0$')
     handles, labels = linax.get_legend_handles_labels()
-    fig.legend(handles, labels, bbox_to_anchor=(1.0, 0.5), loc='center left', fontsize='small')
+
+    pos_lin = linax.get_position()
+    pos_log = logax.get_position()
+    fig.legend(handles, labels, bbox_to_anchor=(pos_lin.x1, 0.5), loc='center left', fontsize='small')
     plt.savefig('Tint_z0.png',bbox_inches='tight')
+
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -206,7 +209,7 @@ def main():
         z0_ss = []
         for filename in sorted(os.listdir(z0_dir)):
             filepath = os.path.join(z0_dir, filename)
-            z0_ss.append(h5py.File(filepath, 'r'))
+            z0_ss.append(filepath)
         ss.append(z0_ss)
     plot_Tint(ss)
 

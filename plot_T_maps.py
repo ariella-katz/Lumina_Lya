@@ -4,7 +4,7 @@ import sys
 import os
 import matplotlib.pyplot as plt
 import argparse
-from matplotlib.colors import LinearSegmentedColormap, to_rgb
+from matplotlib.colors import LinearSegmentedColormap, to_rgb, Normalize, LogNorm
 from matplotlib.gridspec import GridSpec
 from matplotlib.ticker import MultipleLocator, MaxNLocator, AutoMinorLocator
 import colorsys
@@ -43,7 +43,7 @@ def get_full_T_grid(z0_ss):
     return z0, T_ultrablue, T_blue, T_center, T_red, T_ultrared
 
 
-def light_to_dark_cmap(color, name, low_v=1.0, low_s=0.5, high_v=0.25, high_s=1.0):
+def light_to_dark_cmap(color, name, low_v=1.0, low_s=0.35, high_v=0.15, high_s=1.0):
     """
     Blends in HSV space to keep endpoints vivid instead of greyed-out.
 
@@ -56,7 +56,43 @@ def light_to_dark_cmap(color, name, low_v=1.0, low_s=0.5, high_v=0.25, high_s=1.
     low_rgb  = colorsys.hsv_to_rgb(h, low_s,  low_v)
     high_rgb = colorsys.hsv_to_rgb(h, high_s, high_v)
 
-    return LinearSegmentedColormap.from_list(name, [high_rgb, low_rgb], N=256)
+    # return LinearSegmentedColormap.from_list(name, [high_rgb, low_rgb], N=256)
+    return LinearSegmentedColormap.from_list(name, ['black', color, 'white'])
+
+class LogLinearNorm(Normalize):
+    """
+    Maps [vmin, vmid] logarithmically onto [0, log_frac] of the colorbar,
+    and [vmid, vmax] linearly onto [log_frac, 1].
+    """
+    def __init__(self, vmin, vmid=0.1, vmax=1.0, log_frac=0.7, clip=False):
+        super().__init__(vmin, vmax, clip)
+        self.vmid = vmid
+        self.log_frac = log_frac  # fraction of the colorbar given to the log segment
+
+    def __call__(self, value, clip=None):
+        value = np.ma.asarray(value, dtype=float)
+        log_vmin, log_vmid = np.log10(self.vmin), np.log10(self.vmid)
+
+        low_mask = value <= self.vmid
+
+        with np.errstate(divide='ignore', invalid='ignore'):
+            clipped = np.clip(value, self.vmin, None)
+            log_result = self.log_frac * (np.log10(clipped) - log_vmin) / (log_vmid - log_vmin)
+
+        lin_result = self.log_frac + (1 - self.log_frac) * (value - self.vmid) / (self.vmax - self.vmid)
+
+        result = np.where(low_mask, log_result, lin_result)
+        return np.ma.masked_array(np.clip(result, 0, 1), mask=np.ma.getmaskarray(value))
+
+    def inverse(self, value):
+        value = np.asarray(value, dtype=float)
+        log_vmin, log_vmid = np.log10(self.vmin), np.log10(self.vmid)
+
+        low_mask = value <= self.log_frac
+        log_inv = 10 ** (log_vmin + (value / self.log_frac) * (log_vmid - log_vmin))
+        lin_inv = self.vmid + ((value - self.log_frac) / (1 - self.log_frac)) * (self.vmax - self.vmid)
+
+        return np.where(low_mask, log_inv, lin_inv)
 
 def plot_T_maps(ss):
     fig, axes = plt.subplots(8, 5, figsize=(5 * 2.4, 8 * 2.4), sharex=True, sharey=True)
@@ -68,15 +104,15 @@ def plot_T_maps(ss):
 
     # --- Step 1: gather z0 + its 5 tau maps together, and get global vmin/vmax ---
     records = []
-    # max_tau, min_tau = 0, 1e7
+    min_T = 1e7
     for z0i in range(len(ss)):
         z0, T_ub, T_b, T_c, T_r, T_ur = get_full_T_grid(ss[z0i])
         T_data = np.asarray([T_ub, T_b, T_c, T_r, T_ur])
         # max_tau = max(max_tau, np.max(tau_data[np.isfinite(tau_data)]))
-        # min_tau = min(min_tau, np.min(tau_data[np.isfinite(tau_data)]))
+        min_T = min(min_T, np.min(T_data[T_data > 0.]))
         records.append((float(z0), T_ub, T_b, T_c, T_r, T_ur))
 
-    # norm = LogNorm(vmin=min_tau, vmax=max_tau)
+    norm_log = LogNorm(vmin=1e-10, vmax=1.)
 
     # --- Step 2: sort the bundled records by z0 — no axes involved yet ---
     records.sort(key=lambda r: r[0])
@@ -86,31 +122,74 @@ def plot_T_maps(ss):
     for row, (z0, T_ub, T_b, T_c, T_r, T_ur) in enumerate(records):
         for col, (T_map, cmap) in enumerate(zip([T_ub, T_b, T_c, T_r, T_ur], band_cmaps)):
             ax = axes[row, col]
-            ax.imshow(T_map, cmap=cmap, vmin=0, vmax=1, origin='lower',
-                      extent=[-half_fov, half_fov, -half_fov, half_fov])
+            if (col < 3):
+                cax = ax.imshow(T_map, cmap=cmap, norm=norm_log, origin='lower',
+                                extent=[-half_fov, half_fov, -half_fov, half_fov])
+            else:
+                cax = ax.imshow(T_map, cmap=cmap, vmin=0., vmax=1., origin='lower',extent=[-half_fov, half_fov, -half_fov, half_fov])
             ax.grid(True, color='white', alpha=0.5, linewidth=0.5, linestyle='-')
             ax.xaxis.set_major_locator(MaxNLocator(nbins=5))
             ax.yaxis.set_major_locator(MaxNLocator(nbins=5))
             if col == 0:
                 ax.set_ylabel(r'$\Delta\Theta$ [degrees]', fontsize=9)
-                ax.text(0.05, 0.95, f'$z_0$={z0:.1f}',
-                        transform=ax.transAxes, ha='left', va='top',
-                        fontsize=10, color='white',
-                        bbox=dict(boxstyle='round,pad=0.25',
-                                facecolor='black', edgecolor='none', alpha=0.6))
+            ax.text(0.05, 0.95, f'$z_0$={z0:.1f}',
+                    transform=ax.transAxes, ha='left', va='top',
+                    fontsize=12, color='white',
+                    bbox=dict(boxstyle='round,pad=0.25',
+                            facecolor='black', edgecolor='none', alpha=0.6))
             if row == 0:
-                ax.set_title(band_labels[col], fontsize=11)
+                ax.set_title(band_labels[col], fontsize=14)
             if row == 7:
                 ax.set_xlabel(r'$\Delta\Theta$ [degrees]', fontsize=9)
 
     fig.subplots_adjust(top=0.90, wspace=0.05, hspace=0.05)
-    for j in range(5):
-        pos = axes[0, j].get_position()
-        cax = fig.add_axes([pos.x0, 0.93, pos.width, 0.005])
-        cb = fig.colorbar(plt.cm.ScalarMappable(cmap=band_cmaps[j]),
-                          cax=cax, orientation='horizontal', label=rf'$\mathcal{{T}}_\text{{int}}$')
-        cb.ax.tick_params(labelsize=7)
-        cb.ax.xaxis.set_ticks_position('top')
+    # for j in range(5):
+    #     pos = axes[0, j].get_position()
+    #     cax = fig.add_axes([pos.x0, 0.93, pos.width, 0.005])
+    #     cb = fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=band_cmaps[j]),
+    #                       cax=cax, orientation='horizontal', label=rf'$\mathcal{{T}}_\text{{int}}$')
+    #     cb.ax.tick_params(labelsize=7)
+    #     cb.ax.xaxis.set_ticks_position('top')
+
+    def build_loglinear_ticks(vmin, vmid, vmax, n_log=4, n_lin=4):
+        # log-spaced ticks from vmin to vmid (inclusive of both endpoints)
+        log_ticks = np.logspace(np.log10(vmin), np.log10(vmid), n_log)
+        # linear ticks from vmid to vmax (inclusive) -- skip vmid here to avoid a duplicate
+        lin_ticks = np.linspace(vmid, vmax, n_lin)[1:]
+        return np.concatenate([log_ticks, lin_ticks])
+
+    # ticks = build_loglinear_ticks(min_T, 0.1, 1.0, n_log=4, n_lin=4)
+
+    pos0 = axes[0, 0].get_position()
+    pos2 = axes[0, 2].get_position()
+    pos3 = axes[0, 3].get_position()
+    pos4 = axes[0, 4].get_position()
+    cax_log = fig.add_axes([pos0.x0, 0.93, pos2.x1 - pos0.x0, 0.005])
+    cax_lin = fig.add_axes([pos3.x0, 0.93, pos4.x1 - pos3.x0, 0.005])
+
+    cb_log = fig.colorbar(plt.cm.ScalarMappable(norm=norm_log, cmap='gray'),
+                          cax=cax_log, orientation='horizontal')
+    cb_log.set_label(r'$\log\mathcal{T}_\text{int}$', size=14)
+    cb_lin = fig.colorbar(plt.cm.ScalarMappable(cmap='gray'),
+                          cax=cax_lin, orientation='horizontal')
+    cb_lin.set_label(r'$\mathcal{T}_\text{int}$', size=14)
+    cb_log.ax.tick_params(labelsize=8)
+    cb_log.ax.set_clip_on(False)
+    ticks = [1e-10, 1e-8, 1e-6, 1e-4, 1e-2, 1]
+    cb_log.set_ticks(ticks)
+    # cb_log.ax.set_xticklabels([f'{t:.2g}' for t in ticks], fontsize=8)
+    cb_log.ax.xaxis.set_ticks_position('top')
+    cb_lin.ax.tick_params(labelsize=8)
+    # cb_lin.set_ticks(ticks)
+    # cb_lin.ax.set_xticklabels([f'{t:.2g}' for t in ticks], fontsize=8)
+    cb_lin.ax.xaxis.set_ticks_position('top')
+    labels_log = cb_log.ax.get_xticklabels()
+    labels_log[0].set_horizontalalignment('left')
+    labels_log[-1].set_horizontalalignment('right')
+    labels_lin = cb_lin.ax.get_xticklabels()
+    labels_lin[0].set_horizontalalignment('left')
+    labels_lin[-1].set_horizontalalignment('right')
+
 
     plt.savefig('T_maps_grid.png', dpi=200, bbox_inches='tight')
 
