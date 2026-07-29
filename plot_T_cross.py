@@ -405,15 +405,16 @@ def plot_T_cross(ss, lightcone_file):
                   r'$\log\mathcal{T}_\text{int, R}\times$ HI Fraction',
                   r'$\log\mathcal{T}_\text{int, R}\times$ Density']
         cross_corrs = []
-        for mapi in range(len(map2s)):
-            map2 = map2s[mapi]
-            cross_corr = get_cross_corr(map1, map2)
-            cross_corrs.append(cross_corr)
-        vmax = np.abs(np.asarray(cross_corrs)).max()
+        # for mapi in range(len(map2s)):
+        #     map2 = map2s[mapi]
+        #     cross_corr = get_cross_corr(map1, map2)
+        #     cross_corrs.append(cross_corr)
+        # vmax = np.abs(np.asarray(cross_corrs)).max()
         for mapi in range(len(map2s)):
             cross_corr = cross_corrs[mapi]
             # cross_pow_stats = get_cross_pow(map1, map2)
             ax = axes[z0i][mapi]
+            vmax = np.abs(cross_corr).max()
             im = ax.imshow(cross_corr, cmap='RdBu_r', vmin=-vmax, vmax=vmax,
                       extent=[-half_fov, half_fov, -half_fov, half_fov])
             if mapi == 0:
@@ -422,11 +423,12 @@ def plot_T_cross(ss, lightcone_file):
                 ax.set_title(labels[mapi])
             if z0i == 8:
                 ax.set_xlabel(r'$\Delta\Theta$ [degrees]', fontsize=9)
+            fig.colorbar(im, axes=ax)
 
-    pos0 = axes[0, 0].get_position()
-    pos5 = axes[0, 5].get_position()
-    cax = fig.add_axes([pos0.x0, 0.93, pos5.x1 - pos0.x0, 0.005])
-    cb = fig.colorbar(im)
+    # pos0 = axes[0, 0].get_position()
+    # pos5 = axes[0, 5].get_position()
+    # cax = fig.add_axes([pos0.x0, 0.93, pos5.x1 - pos0.x0, 0.005])
+    # cb = fig.colorbar(im)
 
     plt.savefig('cross_corrs.png')
 
