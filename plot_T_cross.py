@@ -398,12 +398,12 @@ def plot_T_cross(ss, lightcone_file):
 
         map1 = T_r
         map2s = [T_ub, T_b, T_c, T_ur, x_HIs, densities]
-        labels = [r'$\log\mathcal{T}_\text{int, R}\cross\log\mathcal{T}_\text{int, UB}$',
-                  r'$\log\mathcal{T}_\text{int, R}\cross\log\mathcal{T}_\text{int, B}$',
-                  r'$\log\mathcal{T}_\text{int, R}\cross\log\mathcal{T}_\text{int, C}$',
-                  r'$\log\mathcal{T}_\text{int, R}\cross\log\mathcal{T}_\text{int, UR}$',
-                  r'$\log\mathcal{T}_\text{int, R}\cross$ HI Fraction',
-                  r'$\log\mathcal{T}_\text{int, R}\cross$ Density']
+        labels = [r'$\log\mathcal{T}_\text{int, R}\times\log\mathcal{T}_\text{int, UB}$',
+                  r'$\log\mathcal{T}_\text{int, R}\times\log\mathcal{T}_\text{int, B}$',
+                  r'$\log\mathcal{T}_\text{int, R}\times\log\mathcal{T}_\text{int, C}$',
+                  r'$\log\mathcal{T}_\text{int, R}\times\log\mathcal{T}_\text{int, UR}$',
+                  r'$\log\mathcal{T}_\text{int, R}\times$ HI Fraction',
+                  r'$\log\mathcal{T}_\text{int, R}\times$ Density']
         cross_corrs = []
         for mapi in range(len(map2s)):
             map2 = map2s[mapi]
