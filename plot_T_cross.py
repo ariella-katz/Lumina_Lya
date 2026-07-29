@@ -411,7 +411,8 @@ def plot_T_cross(ss, lightcone_file):
         #     cross_corrs.append(cross_corr)
         # vmax = np.abs(np.asarray(cross_corrs)).max()
         for mapi in range(len(map2s)):
-            cross_corr = cross_corrs[mapi]
+            map2 = map2s[mapi]
+            cross_corr = get_cross_corr(map1, map2)
             # cross_pow_stats = get_cross_pow(map1, map2)
             ax = axes[z0i][mapi]
             vmax = np.abs(cross_corr).max()
