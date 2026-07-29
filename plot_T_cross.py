@@ -260,8 +260,8 @@ def get_cross_corr(map1, map2):
     # zero-pad
     map1_pad = np.zeros((npad, npad))
     map2_pad = np.zeros((npad, npad))
-    map1_pad[:npad, :npad] = map1_od
-    map2_pad[:npad, :npad] = map2_od
+    map1_pad[:npix, :npix] = map1_od
+    map2_pad[:npix, :npix] = map2_od
 
     # get Fourier transforms
     F1 = np.fft.fft2(map1_pad)
