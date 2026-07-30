@@ -6,15 +6,15 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm, Normalize
 from matplotlib.ticker import AutoMinorLocator
 import matplotlib.patheffects as path_effects
-import cmasher as cmr
-import cmocean
+# import cmasher as cmr
+# import cmocean
 import h5py, os
 from scipy.ndimage import zoom, gaussian_filter1d
 from multiprocessing import Pool
-from tqdm import tqdm
-from PIL import Image
+# from tqdm import tqdm
+# from PIL import Image
 from scipy.signal import savgol_filter
-from plot_tau_CMB import shuffle
+# from plot_tau_CMB import shuffle
 # import yt
 
 # Set rcParams for ticks: inward direction, all sides
