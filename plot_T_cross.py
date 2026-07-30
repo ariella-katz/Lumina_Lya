@@ -4,6 +4,7 @@ import os
 import argparse
 import matplotlib.pyplot as plt
 from astropy.cosmology import Planck18
+from matplotlib.gridspec import GridSpec
 
 def get_full_T_grid(z0_ss):
     n_chunks = int(np.sqrt(len(z0_ss)))
@@ -276,7 +277,7 @@ def get_cross_corr(map1, map2):
     # re-crop
     start = npad // 2 - npix // 2
     end = start + npix
-    cross_corr = cross_corr[start:end, start:end]
+#    cross_corr = cross_corr[start:end, start:end]
     return cross_corr
 
 def get_cross_pow(map1, map2, z0,
@@ -378,18 +379,26 @@ def plot_T_cross(ss, lightcone_file):
         T_records.append((float(z0), T_ub, T_b, T_c, T_r, T_ur))
         with h5py.File(lightcone_file, 'r') as cone:
             zs = cone['Redshifts'][:]
+            if z0i == 0:
             z0_i = np.argmax(zs <= z0)
-            z0_cone = zs[z0_i]
+            z0_cone = float(zs[z0_i])
+            if z0i == 0:
             densities = cone['Density'][..., z0_i].astype(np.float64)
             density_records.append((z0_cone, densities))
             x_HIs = 1. - cone['HII_Fraction'][..., z0_i].astype(np.float64)
-            frac_records.append((z0_cone, densities))
+            frac_records.append((z0_cone, x_HIs))
  
     T_records.sort(key=lambda r: r[0])
     frac_records.sort(key=lambda r: r[0])
     density_records.sort(key=lambda r: r[0])
 
-    fig, axes = plt.subplots(8, 6, figsize=(5 * 2.4, 8 * 2.4), sharex=True, sharey=True)
+#    fig, axes = plt.subplots(8, 6, figsize=(7 * 2.4, 8 * 2.4), sharex=True, sharey=True)
+    n_rows = 8
+    n_cols = 7
+    width_ratios = [1, 0.06] * n_cols
+    fig = plt.figure(figsize=(n_cols * 2.4 + (n_cols - 1)*0.6, n_rows * 2.4))
+    gs = GridSpec(n_rows, n_cols, figure=fig,
+                  wspace=0.6, hspace=0.25)
     half_fov = 3.6 / 4
     for z0i in range(len(T_records)):
         z0, T_ub, T_b, T_c, T_r, T_ur = T_records[z0i]
@@ -397,13 +406,15 @@ def plot_T_cross(ss, lightcone_file):
         _, densities = density_records[z0i]
 
         map1 = T_r
-        map2s = [T_ub, T_b, T_c, T_ur, x_HIs, densities]
-        labels = [r'$\log\mathcal{T}_\text{int, R}\times\log\mathcal{T}_\text{int, UB}$',
-                  r'$\log\mathcal{T}_\text{int, R}\times\log\mathcal{T}_\text{int, B}$',
-                  r'$\log\mathcal{T}_\text{int, R}\times\log\mathcal{T}_\text{int, C}$',
-                  r'$\log\mathcal{T}_\text{int, R}\times\log\mathcal{T}_\text{int, UR}$',
-                  r'$\log\mathcal{T}_\text{int, R}\times$ HI Fraction',
-                  r'$\log\mathcal{T}_\text{int, R}\times$ Density']
+        map2s = [T_r, T_ub, T_b, T_c, T_ur, x_HIs, densities]
+        map2_z0s = [z0, z0, z0, z0, z0, z0_cone, z0_cone]
+        labels = [r'$\mathcal{T}_\text{int, R}\times\mathcal{T}_\text{int, R}$',
+                  r'$\mathcal{T}_\text{int, R}\times\mathcal{T}_\text{int, UB}$',
+                  r'$\mathcal{T}_\text{int, R}\times\mathcal{T}_\text{int, B}$',
+                  r'$\mathcal{T}_\text{int, R}\times\mathcal{T}_\text{int, C}$',
+                  r'$\mathcal{T}_\text{int, R}\times\mathcal{T}_\text{int, UR}$',
+                  r'$\mathcal{T}_\text{int, R}\times$ HI Fraction',
+                  r'$\mathcal{T}_\text{int, R}\times$ Density']
         cross_corrs = []
         # for mapi in range(len(map2s)):
         #     map2 = map2s[mapi]
@@ -414,28 +425,36 @@ def plot_T_cross(ss, lightcone_file):
             map2 = map2s[mapi]
             cross_corr = get_cross_corr(map1, map2)
             # cross_pow_stats = get_cross_pow(map1, map2)
-            ax = axes[z0i][mapi]
-            vmax = np.abs(cross_corr).max()
+            ax = fig.add_subplot(gs[z0i, mapi])
+            vmax = np.percentile(np.abs(cross_corr), 99)
             im = ax.imshow(cross_corr, cmap='RdBu_r', vmin=-vmax, vmax=vmax,
                       extent=[-half_fov, half_fov, -half_fov, half_fov])
+            ax.text(0.05, 0.95, f'$z_0$={map2_z0s[mapi]:.1f}',
+                    transform=ax.transAxes, ha='left', va='top',
+                    fontsize=12, color='white',
+                    bbox=dict(boxstyle='round,pad=0.25',
+                            facecolor='black', edgecolor='none', alpha=0.6))
+            pos = ax.get_position()
+            cax = fig.add_axes([pos.x1, pos.y0, 0.005, pos.height])
+            cb = fig.colorbar(im, cax=cax)
             if mapi == 0:
                 ax.set_ylabel(r'$\Delta\Theta$ [degrees]', fontsize=9)
+            else:
+                ax.set_yticklabels([])
+            if mapi == 6:
+                cb.set_label(r'$\xi(\Delta\Theta)$')
             if z0i == 0:
                 ax.set_title(labels[mapi])
-            if z0i == 8:
+            if z0i == 7:
                 ax.set_xlabel(r'$\Delta\Theta$ [degrees]', fontsize=9)
-            fig.colorbar(im, axes=ax)
-
+            else:
+                ax.set_xticklabels([])
     # pos0 = axes[0, 0].get_position()
     # pos5 = axes[0, 5].get_position()
     # cax = fig.add_axes([pos0.x0, 0.93, pos5.x1 - pos0.x0, 0.005])
     # cb = fig.colorbar(im)
 
-    plt.savefig('cross_corrs.png')
-
-
-
-
+    plt.savefig('cross_corrs.png', dpi=200, bbox_inches='tight')
 
 
 def parse_args():
