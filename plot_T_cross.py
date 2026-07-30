@@ -379,10 +379,8 @@ def plot_T_cross(ss, lightcone_file):
         T_records.append((float(z0), T_ub, T_b, T_c, T_r, T_ur))
         with h5py.File(lightcone_file, 'r') as cone:
             zs = cone['Redshifts'][:]
-            if z0i == 0:
             z0_i = np.argmax(zs <= z0)
             z0_cone = float(zs[z0_i])
-            if z0i == 0:
             densities = cone['Density'][..., z0_i].astype(np.float64)
             density_records.append((z0_cone, densities))
             x_HIs = 1. - cone['HII_Fraction'][..., z0_i].astype(np.float64)
