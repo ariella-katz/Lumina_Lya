@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 from astropy.cosmology import Planck18
 from matplotlib.gridspec import GridSpec
 
+import plot_tau_CMB_spectra as smith
+
 def get_full_T_grid(z0_ss):
     n_chunks = int(np.sqrt(len(z0_ss)))
     s0 = z0_ss[0]
@@ -421,7 +423,8 @@ def plot_T_cross(ss, lightcone_file):
         # vmax = np.abs(np.asarray(cross_corrs)).max()
         for mapi in range(len(map2s)):
             map2 = map2s[mapi]
-            cross_corr = get_cross_corr(map1, map2)
+            # cross_corr = get_cross_corr(map1, map2)
+            _, _, cross_corr = smith.correlation_function_2d(map1, map2=map2)
             # cross_pow_stats = get_cross_pow(map1, map2)
             ax = fig.add_subplot(gs[z0i, mapi])
             vmax = np.percentile(np.abs(cross_corr), 99)
