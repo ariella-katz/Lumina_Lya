@@ -277,7 +277,7 @@ def get_cross_corr(map1, map2):
     # re-crop
     start = npad // 2 - npix // 2
     end = start + npix
-#    cross_corr = cross_corr[start:end, start:end]
+    cross_corr = cross_corr[start:end, start:end]
     return cross_corr
 
 def get_cross_pow(map1, map2, z0,
