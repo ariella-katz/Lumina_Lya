@@ -273,13 +273,13 @@ def get_cross_corr(map1, map2):
     # F(cross_corr(a, b)) = F(a) * conj(F(b))
     #  where F is Fourier transform 
     cross_corr = np.fft.ifft2(F1 * np.conj(F2)).real
-    # Center at 0 lag
-    cross_corr = np.fft.fftshift(cross_corr) / map1_od.size
-
     # re-crop
     start = npad // 2 - npix // 2
     end = start + npix
-    cross_corr = cross_corr[start:end, start:end]
+    cross_corr = cross_corr[:npix, :npix]
+    # Center at 0 lag
+    cross_corr = np.fft.fftshift(cross_corr) / map1_od.size
+
     return cross_corr
 
 def get_cross_pow(map1, map2, z0,
