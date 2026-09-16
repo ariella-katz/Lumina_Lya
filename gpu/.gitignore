@@ -1,0 +1,29 @@
+# Build directories and compiled CUDA/C++ artifacts
+/build*/
+*.o
+*.a
+*.so
+*.so.*
+*.cubin
+*.fatbin
+*.ptx
+/lumina_lya
+/hypergeo_approx
+/numerics_probe
+/test_backend
+/test_numerics
+
+# Generated data, interrupted writes, and profiling captures
+/results/
+/test-artifacts/
+*.partial
+*.partial.*
+*.hdf5.lock/
+*.h5.lock/
+/approx_data.csv
+*.nsys-rep
+*.ncu-rep
+
+# Python caches and batch logs
+__pycache__/
+/lya-*.out
