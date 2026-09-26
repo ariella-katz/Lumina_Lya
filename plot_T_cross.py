@@ -5,6 +5,7 @@ import argparse
 import matplotlib.pyplot as plt
 from astropy.cosmology import Planck18
 from matplotlib.gridspec import GridSpec
+from matplotlib.colors import LogNorm, Normalize
 
 import plot_tau_CMB_spectra as smith
 
@@ -252,7 +253,7 @@ def adaptive_radial_bin(
         "edges": merged_edges,
     }
 
-def get_cross_corr(map1, map2):
+def get_cross_corr_2D(map1, map2):
     npix = map1.shape[0]
     npad = 2 * npix
 
@@ -282,7 +283,7 @@ def get_cross_corr(map1, map2):
 
     return cross_corr
 
-def get_cross_pow(map1, map2, z0,
+def get_cross_pow_2D(map1, map2, z0,
                     nbins_target=25,
                     oversample=2,
                     min_count=30,
@@ -371,7 +372,74 @@ def get_cross_pow(map1, map2, z0,
 
 
 
-def plot_T_cross(ss, lightcone_file):
+def plot_T_cross_1D(ss, lightcone_file):
+    # Get T maps and other maps for all z0s and bands and sort by z0
+    T_records = []
+    frac_records = []
+    density_records = []
+    for z0i in range(len(ss)):
+        z0, T_ub, T_b, T_c, T_r, T_ur = get_full_T_grid(ss[z0i])
+        T_records.append((float(z0), T_ub, T_b, T_c, T_r, T_ur))
+        with h5py.File(lightcone_file, 'r') as cone:
+            zs = cone['Redshifts'][:]
+            z0_i = np.argmax(zs <= z0)
+            z0_cone = float(zs[z0_i])
+            densities = cone['Density'][..., z0_i].astype(np.float64)
+            density_records.append((z0_cone, densities))
+            x_HIs = 1. - cone['HII_Fraction'][..., z0_i].astype(np.float64)
+            frac_records.append((z0_cone, x_HIs))
+
+    T_records.sort(key=lambda r: r[0])
+    frac_records.sort(key=lambda r: r[0])
+    density_records.sort(key=lambda r: r[0])
+
+    labels = [r'$\mathcal{T}_\text{int, R}\times\mathcal{T}_\text{int, R}$',
+              r'$\mathcal{T}_\text{int, R}\times\mathcal{T}_\text{int, UB}$',
+              r'$\mathcal{T}_\text{int, R}\times\mathcal{T}_\text{int, B}$',
+              r'$\mathcal{T}_\text{int, R}\times\mathcal{T}_\text{int, C}$',
+              r'$\mathcal{T}_\text{int, R}\times\mathcal{T}_\text{int, UR}$',
+              r'$\mathcal{T}_\text{int, R}\times$ HI Fraction',
+              r'$\mathcal{T}_\text{int, R}\times$ Density']
+
+    n_pairs = 7
+    z0s = [r[0] for r in T_records]
+    cmap = plt.cm.inferno
+    norm = Normalize(vmin=min(z0s), vmax=max(z0s))
+
+    fig, axes = plt.subplots(1, n_pairs, figsize=(n_pairs * 2.4, 2.6), sharex=True)
+
+    for z0i in range(len(T_records)):
+        z0, T_ub, T_b, T_c, T_r, T_ur = T_records[z0i]
+        _, x_HIs = frac_records[z0i]
+        _, densities = density_records[z0i]
+
+        map1 = T_r
+        map2s = [T_r, T_ub, T_b, T_c, T_ur, x_HIs, densities]
+        color = cmap(norm(z0))
+
+        for mapi in range(n_pairs):
+            map2 = map2s[mapi]
+            theta, xi, counts, dx, dy, xi2d = smith.radial_correlation_function(map1, map2=map2)
+            theta_arcmin = np.rad2deg(theta) * 60.
+            axes[mapi].plot(theta_arcmin, xi, color=color, lw=1.5)
+
+    for mapi, ax in enumerate(axes):
+        ax.set_xscale('log')
+        ax.set_title(labels[mapi], fontsize=10)
+        ax.set_xlabel(r'$\theta$ [arcmin]', fontsize=9)
+        ax.minorticks_on()
+        if mapi != 0:
+            ax.set_yticklabels([])
+    axes[0].set_ylabel(r'$\xi(\theta)$', fontsize=10)
+
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    cbar = fig.colorbar(sm, ax=axes, pad=0.015, aspect=30, fraction=0.02)
+    cbar.set_label(r'$z_0$', fontsize=10)
+
+    plt.savefig('cross_corrs_1D.png', dpi=200, bbox_inches='tight')
+
+def plot_T_cross_2D(ss, lightcone_file):
     # Get T maps and other maps for all z0s and bands and sort by z0
     T_records = []
     frac_records = []
@@ -455,7 +523,7 @@ def plot_T_cross(ss, lightcone_file):
     # cax = fig.add_axes([pos0.x0, 0.93, pos5.x1 - pos0.x0, 0.005])
     # cb = fig.colorbar(im)
 
-    plt.savefig('cross_corrs.png', dpi=200, bbox_inches='tight')
+    plt.savefig('cross_corrs_2D.png', dpi=200, bbox_inches='tight')
 
 
 def parse_args():
@@ -507,7 +575,8 @@ def main():
             filepath = os.path.join(z0_dir, filename)
             z0_ss.append(h5py.File(filepath, 'r'))
         ss.append(z0_ss)
-    plot_T_cross(ss, lightcone_file)
+    plot_T_cross_1D(ss, lightcone_file)
+    plot_T_cross_2D(ss, lightcone_file)
 
 
 if __name__ == "__main__":

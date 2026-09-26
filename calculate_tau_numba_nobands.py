@@ -102,27 +102,33 @@ def project_los_velocity(vel, s, nx, ny, nz, z1=0):
     )
 
 @njit(parallel=True)
-def calc_dtaus(k0, Ks, x, dls, a, taus_out):
+def calc_dtaus(nmini, degrade_frac, k0, Ks, x, dls, a, taus_out):
     nx, ny, nz, nf = x.shape
-    for ix in prange(nx):
-        for iy in range(ny):
-            for iz in range(nz):
-                k0i = k0[ix, iy, iz, 0]
-                Ksi = Ks[ix, iy, iz, 0]
-                dlsi = dls[iz, 0]
-                ai = a[ix, iy, iz, 0]
-                for jf in range(nf):
-                    xi = x[ix, iy, iz, jf]
-                    e1 = math.erf(xi)
-                    e2 = math.erf(xi - Ksi*dlsi)
-                    d1 = dawsn(xi - Ksi*dlsi)
-                    d2 = dawsn(xi)
-                    sqrtpi = math.sqrt(math.pi)
-                    dtau = ((sqrtpi * k0i / (2 * Ksi) * (e1 - e2)) +
-                                              2 * ai * k0i / (sqrtpi * Ksi) * (d1 - d2))
-                    taus_out[ix, iy, jf] += dtau
+    for imini in prange(nmini**2):
+        ixl = (imini // nmini) 
+        x1 = ixl * degrade_frac
+        iyt = (imini % nmini) 
+        y1 = iyt * degrade_frac
+        for iz in range(nz):
+            k0i = k0[ix, iy, iz, 0]
+            Ksi = Ks[ix, iy, iz, 0]
+            dlsi = dls[iz, 0]
+            ai = a[ix, iy, iz, 0]
+            for jf in range(nf):
+                dtau = 0
+                for ix in range(x1, x1+degrade_frac):
+                    for iy in range(y1, y1+degrade_frac):
+                        xi = x[ix, iy, iz, jf]
+                        e1 = math.erf(xi)
+                        e2 = math.erf(xi - Ksi*dlsi)
+                        d1 = dawsn(xi - Ksi*dlsi)
+                        d2 = dawsn(xi)
+                        sqrtpi = math.sqrt(math.pi)
+                        dtau += ((sqrtpi * k0i / (2 * Ksi) * (e1 - e2)) +
+                                                2 * ai * k0i / (sqrtpi * Ksi) * (d1 - d2))
+                taus_out[ixl, iyt, jf] += dtau / degrade_frac**2
 
-def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
+def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk, degrade_frac):
     s = h5py.File(hdf5_file, 'r')
     header = dict(s['Header'].attrs)
     # Determine chunk boundaries
@@ -130,6 +136,8 @@ def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
     # assert n >= 1280, f"NumPixels = {n}, must be >= 1280"
     n_chunks = np.max([n // CHUNK_SIZE, 4])  # Number of chunks in each dimension
     chunk_size = n // n_chunks # For low-res
+    n_mini_chunks = chunk_size // degrade_frac
+    degrade_frac = chunk_size // n_mini_chunks
     n_degrade = TARGET_RESOLUTION // n  # Number of times the data was degraded
     nz = TARGET_DEPTH // n_degrade  # Number of redshift slices
     n_depth = DEPTH_SIZE // n_degrade  # Number of depth slices
@@ -191,10 +199,6 @@ def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
     Dv_min_kms = -2000.
     Dv_max_kms = 2000.
     Dvs = np.linspace(Dv_min_kms*km, Dv_max_kms*km, n_freq)#[None, None, None, :] # Initial frequency offset [cm/s]
-    num_freq_ranges = 5
-    freq_range_edges = [-2000, -500, -100, 101, 501, 2001]
-    freq_range_indices = [np.argmin(np.abs(Dvs - freq_range_edges[i]*km)) + int(np.round(i/num_freq_ranges)) 
-                        for i in range(len(freq_range_edges))]
     for z0 in z0_list:
         subdir = f'z0={z0}'
         if not os.path.exists(os.path.join(dir_path, subdir)):
@@ -212,30 +216,33 @@ def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
         k0 = k0_orig[:,:,i0:, None]
         vth = vth_orig[:,:,i0:, None]
         a = a_orig[:,:,i0:, None]
-        tau_band_avgs = []
-        for i_bin in range(num_freq_ranges):
-            i_freq_start = freq_range_indices[i_bin]
-            i_freq_range = freq_range_indices[i_bin+1] - freq_range_indices[i_bin]
-            # Calculate optical depths (vectorized)
-            Dvs_band = Dvs[None, None, None, i_freq_start:i_freq_start+i_freq_range]
-            Dv_zs = c * ((Dvs_band/c + 1) * (1 + z0)/(1 + zs) - 1)
-            x = -(Dv_zs + v_cells) / vth
-            # dtau = (np.sqrt(np.pi) * k0 / (2 * Ks) * (erf(x) - erf(x - Ks*dls)) +
-            #         2 * a * k0 / (np.sqrt(np.pi) * Ks) * (dawsn(x - Ks*dls) - dawsn(x))) # [x, y, z, freq]
-            # dtaus = np.zeros((chunk_size, chunk_size, len(zs), i_freq_range))
-            taus = np.zeros((chunk_size, chunk_size, i_freq_range))
-            # print(x.shape)
-            # print(taus.shape)
-            calc_dtaus(k0, Ks, x, dls, a, taus)
-            # print(taus.shape)
-            # taus = np.sum(dtaus, axis=2) # [x, y, freq]
-            # Transform to transmission space
-            transmissions = np.exp(-taus)
-            # Take band averages
-            transmission_band_avg = np.sum(transmissions, axis=-1) / i_freq_range # [x, y]
-            # Back to tau space
-            tau_band_avg = -np.log(transmission_band_avg)
-            tau_band_avgs.append(tau_band_avg) # tau_band_avgs: [band, x, y]
+        Dv_zs = c * ((Dvs/c + 1) * (1 + z0)/(1 + zs) - 1)
+        x = -(Dv_zs + v_cells) / vth
+        taus = np.zeros((n_mini_chunks, n_mini_chunks, n_freq))
+        calc_dtaus(n_mini_chunks, degrade_frac, k0, Ks, x, dls, a, taus)
+        # for i_bin in range(num_freq_ranges):
+        #     i_freq_start = freq_range_indices[i_bin]
+        #     i_freq_range = freq_range_indices[i_bin+1] - freq_range_indices[i_bin]
+        #     # Calculate optical depths (vectorized)
+        #     Dvs_band = Dvs[None, None, None, i_freq_start:i_freq_start+i_freq_range]
+        #     Dv_zs = c * ((Dvs_band/c + 1) * (1 + z0)/(1 + zs) - 1)
+        #     x = -(Dv_zs + v_cells) / vth
+        #     # dtau = (np.sqrt(np.pi) * k0 / (2 * Ks) * (erf(x) - erf(x - Ks*dls)) +
+        #     #         2 * a * k0 / (np.sqrt(np.pi) * Ks) * (dawsn(x - Ks*dls) - dawsn(x))) # [x, y, z, freq]
+        #     # dtaus = np.zeros((chunk_size, chunk_size, len(zs), i_freq_range))
+        #     taus = np.zeros((chunk_size, chunk_size, i_freq_range))
+        #     # print(x.shape)
+        #     # print(taus.shape)
+        #     calc_dtaus(k0, Ks, x, dls, a, taus)
+        #     # print(taus.shape)
+        #     # taus = np.sum(dtaus, axis=2) # [x, y, freq]
+        #     # Transform to transmission space
+        #     transmissions = np.exp(-taus)
+        #     # Take band averages
+        #     transmission_band_avg = np.sum(transmissions, axis=-1) / i_freq_range # [x, y]
+        #     # Back to tau space
+        #     tau_band_avg = -np.log(transmission_band_avg)
+        #     tau_band_avgs.append(tau_band_avg) # tau_band_avgs: [band, x, y]
         # Create file
         with h5py.File(os.path.join(dir_path, subdir, filename), 'w') as f:
             f.attrs['HubbleParam'] = h
@@ -247,9 +254,9 @@ def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
             f.attrs['OmegaBaryon'] = OmegaB
             f.attrs['Redshift'] = z0
             f.attrs['Chunk'] = chunk
-            f.create_dataset('tau_band_avgs', data=tau_band_avgs)
+            f.create_dataset('tau_spatial_avgs', data=taus)
             f.create_dataset('Dvs', data=Dvs)
-            f.create_dataset('freq_band_edges', data=freq_range_edges)
+            f.create_dataset('Mini_Chunk_Size', data=degrade_frac)
     return Dvs, taus
 # store band-average tau maps for every half-integer redshift from 3 to 12
 
@@ -277,6 +284,11 @@ def parse_args():
         type=str,
         help="Directory in which to store tau_maps"
     )
+    parser.add_argument(
+            "--degrade_frac",
+            type=int,
+            help="Sqrt number of pixels per spatial avg of T"
+        )
     # parser.add_argument(
     #     "--x1", type=int, default=None,
     #     help="Start index along x-axis (pixel slice). Default: None (full range)."
@@ -317,6 +329,11 @@ def main():
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
 
+    degrade_frac = 4
+    degrade_frac_arg = args.degrade_frac
+    if degrade_frac_arg is not None:
+        degrade_frac = degrade_frac_arg
+
     # with open(args.z0_file, 'r') as f:
     #     z0_list = [[float(x) for x in line.strip().split(',')] for line in f if line.strip()]
 
@@ -326,17 +343,17 @@ def main():
     # with Pool(processes=64) as pool:
     #     pool.starmap(calculate_tau_edges, [(hdf5_file, z0, dir_path, chunk) for chunk in range(n_chunks*n_chunks)])
 
-    import cProfile
-    import pstats
-    calculate_tau_edges(hdf5_file, z0_list[:1], dir_path, chunk)
-    profiler = cProfile.Profile()
-    profiler.enable()
-    calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk)
-    profiler.disable()
-
-    stats = pstats.Stats(profiler).sort_stats('cumulative')
-    stats.print_stats(20)
+    # import cProfile
+    # import pstats
+    # calculate_tau_edges(hdf5_file, z0_list[:1], dir_path, chunk)
+    # profiler = cProfile.Profile()
+    # profiler.enable()
     # calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk)
+    # profiler.disable()
+
+    # stats = pstats.Stats(profiler).sort_stats('cumulative')
+    # stats.print_stats(20)
+    calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk, degrade_frac)
 
 
 if __name__ == "__main__":

@@ -96,7 +96,7 @@ def project_los_velocity(vel, s, nx, ny, nz, z1=0):
         + vel[..., 2] * nz[:, :, None]
     )
 
-def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
+def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk, degrade_frac):
     s = h5py.File(hdf5_file, 'r')
     header = dict(s['Header'].attrs)
     # Determine chunk boundaries
@@ -104,6 +104,7 @@ def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
     # assert n >= 1280, f"NumPixels = {n}, must be >= 1280"
     n_chunks = np.max([n // CHUNK_SIZE, 4])  # Number of chunks in each dimension
     chunk_size = n // n_chunks # For low-res
+    degrade_frac = chunk_size // (chunk_size // degrade_frac)
     n_degrade = TARGET_RESOLUTION // n  # Number of times the data was degraded
     nz = TARGET_DEPTH // n_degrade  # Number of redshift slices
     n_depth = DEPTH_SIZE // n_degrade  # Number of depth slices
@@ -197,19 +198,19 @@ def calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk):
         for i_bin in range(num_freq_ranges):
             i_freq_start = freq_range_indices[i_bin]
             i_freq_range = freq_range_indices[i_bin+1] - freq_range_indices[i_bin]
-            # # Calculate optical depths (vectorized)
-            # Dvs_band = Dvs[None, None, None, i_freq_start:i_freq_start+i_freq_range]
-            # Dv_zs = c * ((Dvs_band/c + 1) * (1 + z0)/(1 + zs) - 1)
-            # x = -(Dv_zs + v_cells) / vth
-            # dtau = (np.sqrt(np.pi) * k0 / (2 * Ks) * (erf(x) - erf(x - Ks*dls)) +
-            #         2 * a * k0 / (np.sqrt(np.pi) * Ks) * (dawsn(x - Ks*dls) - dawsn(x))) # [x, y, z, freq]
-            # taus = np.sum(dtau, axis=2) # [x, y, freq]
+            # Calculate optical depths (vectorized)
+            Dvs_band = Dvs[None, None, None, i_freq_start:i_freq_start+i_freq_range]
+            Dv_zs = c * ((Dvs_band/c + 1) * (1 + z0)/(1 + zs) - 1)
+            x = -(Dv_zs + v_cells) / vth
+            dtau = (np.sqrt(np.pi) * k0 / (2 * Ks) * (erf(x) - erf(x - Ks*dls)) +
+                    2 * a * k0 / (np.sqrt(np.pi) * Ks) * (dawsn(x - Ks*dls) - dawsn(x))) # [x, y, z, freq]
+            taus = np.sum(dtau, axis=2) # [x, y, freq]
             # Transform to transmission space
-            # transmissions = np.exp(-taus)
-            # # Take band averages
-            # transmission_band_avg = np.sum(transmissions, axis=-1) / i_freq_range # [x, y]
-            # # Back to tau space
-            # tau_band_avg = np.log(transmission_band_avg)
+            transmissions = np.exp(-taus)
+            # Take band averages
+            transmission_band_avg = np.sum(transmissions, axis=-1) / i_freq_range # [x, y]
+            # Back to tau space
+            tau_band_avg = np.log(transmission_band_avg)
             # tau_band_avgs.append(tau_band_avg) # tau_band_avgs: [band, x, y]
         # Create file
         with h5py.File(os.path.join(dir_path, subdir, filename), 'w') as f:
@@ -253,6 +254,11 @@ def parse_args():
         type=str,
         help="Directory in which to store tau_maps"
     )
+    parser.add_argument(
+        "--degrade_frac",
+        type=int,
+        help="Sqrt number of pixels per spatial avg of T"
+    )
     # parser.add_argument(
     #     "--x1", type=int, default=None,
     #     help="Start index along x-axis (pixel slice). Default: None (full range)."
@@ -292,6 +298,12 @@ def main():
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
 
+    degrade_frac = 4
+    degrade_frac_arg = args.degrade_frac
+    if degrade_frac_arg is not None:
+        degrade_frac = degrade_frac_arg
+
+
     # with open(args.z0_file, 'r') as f:
     #     z0_list = [[float(x) for x in line.strip().split(',')] for line in f if line.strip()]
 
@@ -301,7 +313,7 @@ def main():
     # with Pool(processes=64) as pool:
     #     pool.starmap(calculate_tau_edges, [(hdf5_file, z0, dir_path, chunk) for chunk in range(n_chunks*n_chunks)])
 
-    calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk)
+    calculate_tau_edges(hdf5_file, z0_list, dir_path, chunk, degrade_frac)
 
 
 if __name__ == "__main__":
