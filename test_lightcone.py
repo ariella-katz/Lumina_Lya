@@ -15,7 +15,7 @@ def main():
         zs = cone['Redshifts'][:]
         z0_i = np.argmax(zs <= 13)
         z0_cone = float(zs[z0_i])
-        densities = cone['Density'][..., z0_i].astype(np.float64)
+        densities = cone['HII_Fraction'][..., z0_i].astype(np.float64)
         plt.imshow(densities)
         plt.savefig("density_test.png", dpi=200, bbox_inches='tight')
 
