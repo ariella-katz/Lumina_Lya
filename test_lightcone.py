@@ -10,7 +10,7 @@ from matplotlib.colors import LogNorm, Normalize
 import plot_tau_CMB_spectra as smith
 
 def main():
-    lightcone_filename = "~/scratch/katz_All.hdf5"
+    lightcone_filename = os.path.expanduser("~/scratch/katz_All.hdf5")
     with h5py.File(lightcone_filename, 'r') as cone:
         zs = cone['Redshifts'][:]
         z0_i = np.argmax(zs <= 13)
@@ -18,3 +18,6 @@ def main():
         densities = cone['Density'][..., z0_i].astype(np.float64)
         plt.imshow(densities)
         plt.savefig("density_test.png", dpi=200, bbox_inches='tight')
+
+if __name__ == "__main__":
+    main()
