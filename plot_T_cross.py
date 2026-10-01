@@ -385,6 +385,7 @@ def plot_T_cross_1D(ss, lightcone_file):
             z0_i = np.argmax(zs <= z0)
             z0_cone = float(zs[z0_i])
             densities = cone['Density'][..., z0_i].astype(np.float64)
+            print("densities sample: ", densities[10][5])
             density_records.append((z0_cone, densities))
             x_HIs = 1. - cone['HII_Fraction'][..., z0_i].astype(np.float64)
             frac_records.append((z0_cone, x_HIs))
@@ -403,8 +404,8 @@ def plot_T_cross_1D(ss, lightcone_file):
 
     n_pairs = 7
     z0s = [r[0] for r in T_records]
-    cmap = plt.cm.inferno
-    norm = Normalize(vmin=max(z0s), vmax=min(z0s))
+    cmap = plt.cm.inferno_r
+    norm = Normalize(vmin=min(z0s), vmax=max(z0s))
 
     fig, axes = plt.subplots(1, n_pairs, figsize=(n_pairs * 2.4, 2.6), sharex=True)
 
@@ -452,7 +453,6 @@ def plot_T_cross_2D(ss, lightcone_file):
             z0_i = np.argmax(zs <= z0)
             z0_cone = float(zs[z0_i])
             densities = cone['Density'][..., z0_i].astype(np.float64)
-            print("densities sample: ", densities[10][5])
             density_records.append((z0_cone, densities))
             x_HIs = 1. - cone['HII_Fraction'][..., z0_i].astype(np.float64)
             frac_records.append((z0_cone, x_HIs))
