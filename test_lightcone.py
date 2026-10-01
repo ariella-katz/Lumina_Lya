@@ -13,7 +13,7 @@ def main():
     lightcone_filename = os.path.expanduser("~/scratch/katz_All.hdf5")
     with h5py.File(lightcone_filename, 'r') as cone:
         zs = cone['Redshifts'][:]
-        z0_i = np.argmax(zs <= 13)
+        z0_i = np.argmax(zs <= 6)
         z0_cone = float(zs[z0_i])
         densities = cone['HII_Fraction'][..., z0_i].astype(np.float64)
         plt.imshow(densities)
