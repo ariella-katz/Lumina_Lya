@@ -9,7 +9,7 @@ The default is **Band+Voigt**, with a maximum spectral spacing of 5 km/s. This r
 Run these commands from the repository root. They compile code without starting a GPU calculation. Two build workers limit login-node CPU use.
 
 ```bash
-/opt/ohpc/pub/utils/cmake/4.0.0/bin/cmake -S gpu -B gpu/build \
+/opt/ohpc/pub/utils/cmake/4.3.2/bin/cmake -S gpu -B gpu/build \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_C_COMPILER=/opt/ohpc/pub/compiler/gcc/13.2.0/bin/gcc \
   -DCMAKE_CXX_COMPILER=/opt/ohpc/pub/compiler/gcc/13.2.0/bin/g++ \
