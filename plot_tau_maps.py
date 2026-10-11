@@ -12,7 +12,7 @@ import colorsys
 def get_full_tau_grid(z0_ss):
     n_chunks = int(np.sqrt(len(z0_ss)))
     s0 = z0_ss[0]
-    z0 = float(np.asarray(s0.attrs['Redshift']).squeeze())
+    z0 = float(np.asarray(s0.attrs['SourceRedshiftRequested']).squeeze())
     tau_band_avgs_0 = s0['tau_band_avgs'][:]
     chunk_size = tau_band_avgs_0.shape[1]
     tau_ultrablue = np.zeros((n_chunks*chunk_size, n_chunks*chunk_size))
