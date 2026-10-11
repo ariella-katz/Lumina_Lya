@@ -51,6 +51,43 @@ class Pipeline(unittest.TestCase):
                             "--dv-step", "1000", "--tile-size", "2", "--depth-slab", "2",
                             "--products", "maps,spectra,cumulative", *extra, success=success)
 
+    def test_spatial_binning(self):
+        """T_binned equals a NumPy block mean of exp(-taus), whatever the tile size."""
+        def bin_index(npix, k):                     # last bin absorbs the remainder
+            return np.minimum(np.arange(npix) // (npix // k), k - 1)
+        for number, k in ((1, 1), (2, 1), (4, 2), (9, 3)):   # N -> k = floor(sqrt(N))
+            out = self.root / f"binned_{number}"
+            self.run_native(out, "--binning-number", number)
+            for path in self.products(out).values():
+                with h5py.File(path) as f:
+                    taus, binned = f["taus"][:], f["T_binned"][:]
+                    self.assertEqual(binned.shape, (k, k, taus.shape[-1]))
+                    self.assertEqual(int(f.attrs["BinsPerSide"]), k)
+                    idx = bin_index(taus.shape[0], k)
+                    expected = np.zeros_like(binned)
+                    for bx in range(k):
+                        for by in range(k):
+                            expected[bx, by] = np.exp(-taus[np.ix_(idx == bx, idx == by)]).mean(axis=(0, 1))
+                    np.testing.assert_allclose(binned, expected, rtol=1e-12, atol=1e-14)
+                    self.assertTrue(np.all((binned >= 0) & (binned <= 1)))
+        # one bin per pixel reproduces the unbinned spectra exactly
+        with h5py.File(next(iter(self.products(self.root / "binned_9").values()))) as f:
+            np.testing.assert_allclose(f["T_binned"][:], np.exp(-f["taus"][:]), rtol=1e-12)
+        # invalid requests are rejected
+        self.run_native(self.root / "bad_region", "--binning-number", 4, "--region", "0,2,0,2", success=False)
+        # asking for more bins than pixels (k=10 > npix=3) falls back to one pixel per bin
+        result = self.run_native(self.root / "too_many", "--binning-number", 100)
+        self.assertIn("one pixel per bin", result.stderr)
+        for path in self.products(self.root / "too_many").values():
+            with h5py.File(path) as f:
+                self.assertEqual(int(f.attrs["BinsPerSide"]), 3)
+                np.testing.assert_allclose(f["T_binned"][:], np.exp(-f["taus"][:]), rtol=1e-12)
+        # binning is off by default
+        self.run_native(self.root / "plain")
+        for path in self.products(self.root / "plain").values():
+            with h5py.File(path) as f:
+                self.assertNotIn("T_binned", f)
+
     @staticmethod
     def products(directory):
         result = {}

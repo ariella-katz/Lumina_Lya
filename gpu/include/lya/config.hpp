@@ -11,6 +11,7 @@ struct Config {
     Profile profile = Profile::Voigt;
     double dv_step = 5, max_dln = 1e-3;
     std::uint64_t tile_size = 128, depth_slab = 128;
+    std::uint64_t binning_number = 0;   // 0 = off; else target number of spatially averaged spectra
     double host_mib = 1024, device_mib = 0;
     int device = 0;
     std::int64_t chunk = -1;

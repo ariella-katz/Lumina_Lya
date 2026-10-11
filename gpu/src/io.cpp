@@ -225,6 +225,25 @@ Product::Product(const fs::path& target,const Input& in,const Config& c,const Re
         maps_=h5::create(file_,"tau_band_avgs",{5,nx,ny},{1,std::min<std::uint64_t>(nx,128),std::min<std::uint64_t>(ny,128)});
         if (c.spectra) spectra_=h5::create(file_,"taus",{nx,ny,grid.frequencies.size()},
             {std::min<std::uint64_t>(nx,16),std::min<std::uint64_t>(ny,16),std::min<std::size_t>(grid.frequencies.size(),128)});
+        if (c.binning_number) {
+            std::uint64_t k=static_cast<std::uint64_t>(std::sqrt(static_cast<double>(c.binning_number)));
+            while (k*k>c.binning_number) --k;
+            while ((k+1)*(k+1)<=c.binning_number) ++k;
+            if (k>in.header.pixels) {   // more bins requested than pixels: one pixel per bin
+                std::cerr<<"Warning: --binning-number "<<c.binning_number<<" asks for "<<k<<" bins per side but the map has "
+                         <<in.header.pixels<<" pixels per side; using one pixel per bin ("<<in.header.pixels<<" x "<<in.header.pixels<<" spectra).\n";
+                k=in.header.pixels;
+            }
+            if (k==0) throw std::runtime_error("Cannot bin an empty map");
+            bins_per_side_=k; bin_size_=in.header.pixels/k;
+            bin_sum_.assign(k*k*grid.frequencies.size(),0.);
+            bin_count_.assign(k*k,0);
+            binned_=h5::create(file_,"T_binned",{k,k,grid.frequencies.size()});
+            h5::put_index(file_,"BinningNumber",c.binning_number);
+            h5::put_index(file_,"BinsPerSide",k);
+            h5::put_index(file_,"BinSizePixels",bin_size_);
+            h5::put_string(file_,"BinnedSpectraMeaning","mean of exp(-tau) over the pixels in each bin; the last bin row/column also holds the remainder pixels");
+        }
         if (c.cumulative) {
             auto first=std::min<std::uint64_t>(s.start_cell+1,in.redshifts.size());
             std::vector<double> downstream(in.redshifts.begin()+first,in.redshifts.end());
@@ -261,6 +280,20 @@ void Product::write_tile(const Region& tile,const Spectrum& grid,const double* t
     auto nx=tile.x1-tile.x0,ny=tile.y1-tile.y0;
     h5::write(maps_,{0,tile.x0-region_.x0,tile.y0-region_.y0},{5,nx,ny},bands.data());
     if (config_.spectra) h5::write(spectra_,{tile.x0-region_.x0,tile.y0-region_.y0,0},{nx,ny,nf},tau);
+    if (bins_per_side_) {
+        const auto k=bins_per_side_;
+        for (std::uint64_t ix=0;ix<nx;++ix) {
+            const auto bx=std::min((tile.x0+ix-region_.x0)/bin_size_,k-1);
+            for (std::uint64_t iy=0;iy<ny;++iy) {
+                const auto by=std::min((tile.y0+iy-region_.y0)/bin_size_,k-1);
+                const auto bin=bx*k+by;
+                const double* spectrum=tau+(ix*ny+iy)*nf;
+                double* sum=bin_sum_.data()+bin*nf;
+                for (std::size_t f=0;f<nf;++f) sum[f]+=std::exp(-spectrum[f]);
+                ++bin_count_[bin];
+            }
+        }
+    }
 }
 void Product::complete(const std::vector<double>& cumulative,double reading,double transfer,double kernel,double writing) {
     std::vector<double> means=total_transmission_;
@@ -279,12 +312,23 @@ void Product::complete(const std::vector<double>& cumulative,double reading,doub
         auto ds=h5::create(file_,"T_cum_bands",{5,length});
         h5::write(ds,{0,0},{5,length},data.data());
     }
+    if (bins_per_side_) {
+        const auto nf=bin_sum_.size()/(bins_per_side_*bins_per_side_);
+        std::uint64_t counted=0;
+        for (std::uint64_t bin=0;bin<bin_count_.size();++bin) {
+            if (!bin_count_[bin]) throw std::runtime_error("Empty spatial bin");
+            counted+=bin_count_[bin];
+            for (std::size_t f=0;f<nf;++f) bin_sum_[bin*nf+f]/=static_cast<double>(bin_count_[bin]);
+        }
+        if (counted!=region_.rays()) throw std::runtime_error("Binned pixel count disagrees with the region size");
+        h5::write(binned_,{0,0,0},{bins_per_side_,bins_per_side_,nf},bin_sum_.data());
+    }
     h5::vector(file_,"T_bands",means);
     h5::put_attr(file_,"ReadSeconds",reading); h5::put_attr(file_,"TransferSeconds",transfer);
     h5::put_attr(file_,"KernelSeconds",kernel); h5::put_attr(file_,"WriteSeconds",writing);
     h5::put_attr(file_,"Complete",1);
     h5::check(H5Fflush(file_,H5F_SCOPE_GLOBAL),"flushing completed output");
-    maps_=h5::Handle(); spectra_=h5::Handle(); file_=h5::Handle();
+    maps_=h5::Handle(); spectra_=h5::Handle(); binned_=h5::Handle(); file_=h5::Handle();
     if (!config_.overwrite && fs::exists(target_)) throw std::runtime_error("Output appeared while processing: "+target_.string());
     fs::rename(temporary_,target_); committed_=true;
     std::cout<<"Wrote "<<target_<<'\n';

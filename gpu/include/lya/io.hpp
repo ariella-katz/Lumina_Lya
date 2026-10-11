@@ -20,12 +20,16 @@ public:
 class Product {
     std::filesystem::path target_, temporary_, lock_;
     bool committed_ = false;
-    h5::Handle file_, maps_, spectra_;
+    h5::Handle file_, maps_, spectra_, binned_;
     Config config_;
     Region region_;
     Source source_;
     std::uint64_t depth_ = 0;
     std::vector<double> total_transmission_;
+    // Spatial binning (inactive when bins_per_side_ == 0)
+    std::uint64_t bins_per_side_ = 0, bin_size_ = 0;
+    std::vector<double> bin_sum_;             // [bin][frequency]: running sum of exp(-tau)
+    std::vector<std::uint64_t> bin_count_;    // [bin]: pixels accumulated so far
 public:
     Product(const std::filesystem::path&, const Input&, const Config&, const Region&,
             const Source&, const Spectrum&);

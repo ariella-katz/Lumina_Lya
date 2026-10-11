@@ -52,6 +52,9 @@ void print_help() {
         "  --region X0,X1,Y0,Y1       Half-open spatial bounds\n"
         "  --chunk INDEX              Historical spatial chunk selection\n"
         "  --tile-size N --depth-slab N   Maximum internal buffer dimensions (128)\n"
+        "  --binning-number N         Also write mean-transmission spectra on a k x k grid of\n"
+        "                             spatial bins, k = floor(sqrt(N)), capped at one pixel per bin;\n"
+        "                             full-map runs only\n"
         "  --host-memory-mib N        Host working-buffer budget (default 1024)\n"
         "  --device-memory-mib N      Device budget (default 80% free memory)\n"
         "  --device INDEX --backend cuda|cpu\n"
@@ -92,6 +95,7 @@ Config parse_config(int argc, char** argv) {
         else if (key == "--max-dln") cfg.max_dln = real(value);
         else if (key == "--tile-size") cfg.tile_size = integer(value);
         else if (key == "--depth-slab") cfg.depth_slab = integer(value);
+        else if (key == "--binning-number") cfg.binning_number = integer(value);
         else if (key == "--host-memory-mib") cfg.host_mib = real(value);
         else if (key == "--device-memory-mib") cfg.device_mib = real(value);
         else if (key == "--device") {
@@ -123,6 +127,8 @@ Config parse_config(int argc, char** argv) {
     if (cfg.dv_step < 1e-4 || cfg.max_dln < 1e-8) throw std::runtime_error("Requested resolution exceeds supported planning bounds");
     if (cfg.resume && cfg.overwrite) throw std::runtime_error("Choose resume or overwrite, not both");
     if (cfg.has_region && cfg.chunk >= 0) throw std::runtime_error("Choose region or chunk, not both");
+    if (cfg.binning_number && (cfg.has_region || cfg.chunk >= 0))
+        throw std::runtime_error("--binning-number needs the full map; do not combine it with --region or --chunk");
     if (cfg.command == "merge") {
         if (cfg.output.empty() || cfg.merge_inputs.empty()) throw std::runtime_error("merge requires --output and tile files");
     } else {
@@ -269,6 +275,7 @@ std::string configuration(const Config& c, const Region& r, bool with_region) {
         << ";profile=" << (c.profile==Profile::Voigt?"voigt":"delta") << ";legacy=" << c.legacy
         << ";dv_step=" << number(c.dv_step) << ";max_dln=" << number(c.max_dln)
         << ";spectra=" << c.spectra << ";cumulative=" << c.cumulative;
+    if (c.binning_number) out << ";binning=" << c.binning_number;   // only when on: old signatures unchanged
     if (with_region) out << ";region=" << r.x0 << ',' << r.x1 << ',' << r.y0 << ',' << r.y1;
     return out.str();
 }
