@@ -16,7 +16,8 @@ import plot_tau_CMB_spectra as smith
 def get_full_T_grid(z0_paths):
     n_chunks = int(np.sqrt(len(z0_paths)))
     with h5py.File(z0_paths[0], 'r') as s0:
-        z0 = float(np.asarray(s0.attrs['SourceRedshiftRequested']).squeeze())
+#        z0 = float(np.asarray(s0.attrs['SourceRedshiftRequested']).squeeze())
+	z0 = float(np.asarray(s0.attrs['Redshift']).squeeze())
         chunk_size = s0['tau_band_avgs'].shape[1]
     N = n_chunks * chunk_size
 
