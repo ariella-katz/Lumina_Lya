@@ -158,7 +158,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--maps-dir', required=True, help='directory with the z0=... folders (band maps)')
     p.add_argument('--input', required=True, help='lightcone file with HII_Fraction and Density (e.g. All.hdf5)')
-    p.add_argument('--output', default='xcorr.png')
+    p.add_argument('--output', default='red_T_dens_frac_xcorr.png')
     p.add_argument('--band', choices=list(BANDS), default='red')
     p.add_argument('--normalize', choices=['coefficient', 'peak'], default='peak')
     p.add_argument('--diff-scale', type=float, default=1.0, help='multiply the two difference curves')
