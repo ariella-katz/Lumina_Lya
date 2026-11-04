@@ -122,7 +122,7 @@ def curves(T, xhii, rho, rmax, normalize, diff_scale):
             return {k: nan for k in keys}
         auto, cx_hii, cx_rho = auto / auto[0], cx_hii / cx_hii[0], cx_rho / cx_rho[0]
     return {'auto': auto, 'hii': cx_hii, 'rho': cx_rho,
-            'dhii': (cx_hii - auto) * diff_scale, 'drho': (cx_rho - auto) * diff_scale}
+            'dhii': (cx_hii * auto) * diff_scale, 'drho': (cx_rho * auto) * diff_scale}
 
 
 def compute(maps_dir, input_path, band, rmax_frac, normalize, diff_scale):
@@ -160,7 +160,7 @@ def main():
     p.add_argument('--input', required=True, help='lightcone file with HII_Fraction and Density (e.g. All.hdf5)')
     p.add_argument('--output', default='xcorr.png')
     p.add_argument('--band', choices=list(BANDS), default='red')
-    p.add_argument('--normalize', choices=['coefficient', 'peak'], default='coefficient')
+    p.add_argument('--normalize', choices=['coefficient', 'peak'], default='peak')
     p.add_argument('--diff-scale', type=float, default=1.0, help='multiply the two difference curves')
     p.add_argument('--rmax-frac', type=float, default=0.5, help='largest separation, as a fraction of the map size')
     p.add_argument('--fov-deg', type=float, default=3.6, help='field of view of the map in degrees')
@@ -178,7 +178,7 @@ def main():
     scale = f' $\\times${args.diff_scale:g}' if args.diff_scale != 1 else ''
 
     # (curve key, difference key, line style, name used in labels)
-    panels = [('hii', 'dhii', '--', r'$x_{\rm HII}$'), ('rho', 'drho', ':', 'density')]
+    panels = [('hii', 'dhii', '--', r'$x_{\rm HII}$'), ('rho', 'drho', '--', 'density')]
     fig, axes = plt.subplots(1, 2, figsize=(13, 5.6), sharex=True, sharey=True)   # same scale in both panels
     print('  z0    r(T,xHII)  r(T,rho)   (zero-lag values; only meaningful for --normalize coefficient)')
     for ax, (key, dkey, ls, name) in zip(axes, panels):
