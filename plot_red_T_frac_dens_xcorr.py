@@ -1,29 +1,27 @@
-"""Auto- and cross-correlations of a transmission band with the HI fraction and the density.
+"""Auto- and cross-correlations of a transmission band with the HII fraction and the density.
 
 For every source redshift z0, the 2-D map of the chosen band's transmission (default: red) is correlated
 with itself and with two 2-D fields taken from the input lightcone at the SOURCE PLANE (the depth cell that
 contains the source, recorded in the output files as SourceCell):
-      x_HI = 1 - HII_Fraction      and      Density.
+      x_HII = HII_Fraction      and      Density.
 Correlations are azimuthally averaged over pixel separation (zero-padded FFTs with exact pair counting, so
 the finite, non-periodic map is handled without wrap-around), after subtracting each map's mean.
 
-One panel, coloured by source redshift (solid = autocorrelation, dashed = HI cross-correlation, dotted =
-density cross-correlation; the two differences "cross - auto" use alpha = 1):
-    solid  alpha .6   auto-correlation of T_band
-    dashed alpha .6   cross-correlation  T_band x x_HI
-    dotted alpha .6   cross-correlation  T_band x Density
-    dashed alpha 1    (T x x_HI)  - (T x T)
-    dotted alpha 1    (T x Density) - (T x T)
+Two panels side by side with a shared axis range, every curve coloured by source redshift:
+  left  (HII fraction)                      right (density)
+    solid  alpha .6  autocorrelation of T     solid  alpha .6  autocorrelation of T
+    dashed alpha .6  T x x_HII                dotted alpha .6  T x density
+    dashed alpha 1   (T x x_HII) - autocorr   dotted alpha 1   (T x density) - autocorr
 
-Scaling (--normalize):
-    coefficient (default)  divide by the standard deviations, so every curve is a correlation coefficient and
-                           the autocorrelation starts at 1; all five curves are dimensionless and comparable.
-    peak                   divide each curve by its own value at the smallest separation, so every curve
-                           starts at 1 and the differences show pure shape differences.
+Scaling (--normalize), identical in both panels:
+    coefficient (default)  divide by the standard deviations, so every curve is a correlation coefficient
+                           (autocorrelation starts at 1); both panels use the same y range.
+    peak                   divide each curve by its own value at the smallest separation (every curve starts
+                           at 1), so the differences show pure shape differences.
 --diff-scale multiplies the two difference curves if they are too small to see.
 
 Usage:
-    python plot_xcorr.py --maps-dir tau_maps_gpu_new --input /scratch/.../All.hdf5 --output xcorr.png
+    python plot_xcorr.py --maps-dir tau_maps_xcorr --input /scratch/.../All.hdf5 --output xcorr.png
 """
 import argparse
 import os
@@ -108,22 +106,23 @@ def correlation_profile(a, b, rmax):
     return num / den
 
 
-def curves(T, xhi, rho, rmax, normalize, diff_scale):
-    """The five curves for one source redshift (NaN arrays if a map is constant and cannot be normalised)."""
+def curves(T, xhii, rho, rmax, normalize, diff_scale):
+    """The curves for one source redshift (NaN arrays if a map is constant and cannot be normalised)."""
+    keys = ('auto', 'hii', 'rho', 'dhii', 'drho')
     nan = np.full(rmax + 1, np.nan)
-    auto, cx_hi, cx_rho = (correlation_profile(T, T, rmax), correlation_profile(T, xhi, rmax),
-                           correlation_profile(T, rho, rmax))
+    auto, cx_hii, cx_rho = (correlation_profile(T, T, rmax), correlation_profile(T, xhii, rmax),
+                            correlation_profile(T, rho, rmax))
     if normalize == 'coefficient':
-        sT, sH, sR = T.std(), xhi.std(), rho.std()
+        sT, sH, sR = T.std(), xhii.std(), rho.std()
         if min(sT, sH, sR) == 0:
-            return {k: nan for k in ('auto', 'hi', 'rho', 'dhi', 'drho')}
-        auto, cx_hi, cx_rho = auto / sT**2, cx_hi / (sT * sH), cx_rho / (sT * sR)
+            return {k: nan for k in keys}
+        auto, cx_hii, cx_rho = auto / sT**2, cx_hii / (sT * sH), cx_rho / (sT * sR)
     else:
-        if 0 in (auto[0], cx_hi[0], cx_rho[0]):
-            return {k: nan for k in ('auto', 'hi', 'rho', 'dhi', 'drho')}
-        auto, cx_hi, cx_rho = auto / auto[0], cx_hi / cx_hi[0], cx_rho / cx_rho[0]
-    return {'auto': auto, 'hi': cx_hi, 'rho': cx_rho,
-            'dhi': (cx_hi - auto) * diff_scale, 'drho': (cx_rho - auto) * diff_scale}
+        if 0 in (auto[0], cx_hii[0], cx_rho[0]):
+            return {k: nan for k in keys}
+        auto, cx_hii, cx_rho = auto / auto[0], cx_hii / cx_hii[0], cx_rho / cx_rho[0]
+    return {'auto': auto, 'hii': cx_hii, 'rho': cx_rho,
+            'dhii': (cx_hii - auto) * diff_scale, 'drho': (cx_rho - auto) * diff_scale}
 
 
 def compute(maps_dir, input_path, band, rmax_frac, normalize, diff_scale):
@@ -145,11 +144,11 @@ def compute(maps_dir, input_path, band, rmax_frac, normalize, diff_scale):
     with h5py.File(input_path, 'r') as f:
         hii, dens = SliceReader(f['HII_Fraction']), SliceReader(f['Density'])
         for z0, cell, dist, T in entries:
-            xhi, rho = 1.0 - hii[cell], dens[cell]
-            if xhi.shape != T.shape:
-                raise ValueError(f'Map is {T.shape} but the input fields are {xhi.shape}')
+            xhii, rho = hii[cell], dens[cell]
+            if xhii.shape != T.shape:
+                raise ValueError(f'Map is {T.shape} but the input fields are {xhii.shape}')
             rmax = int(rmax_frac * min(T.shape))
-            out.append((z0, dist, T.shape[0], curves(T, xhi, rho, rmax, normalize, diff_scale)))
+            out.append((z0, dist, T.shape[0], curves(T, xhii, rho, rmax, normalize, diff_scale)))
     out.sort(key=lambda e: e[0])
     return out
 
@@ -159,7 +158,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--maps-dir', required=True, help='directory with the z0=... folders (band maps)')
     p.add_argument('--input', required=True, help='lightcone file with HII_Fraction and Density (e.g. All.hdf5)')
-    p.add_argument('--output', default='red_T_frac_dens_xcorr.png')
+    p.add_argument('--output', default='xcorr.png')
     p.add_argument('--band', choices=list(BANDS), default='red')
     p.add_argument('--normalize', choices=['coefficient', 'peak'], default='coefficient')
     p.add_argument('--diff-scale', type=float, default=1.0, help='multiply the two difference curves')
@@ -174,33 +173,34 @@ def main():
     zs = np.array([r[0] for r in results])
     norm = Normalize(vmin=zs.min(), vmax=zs.max())
     cmap = plt.get_cmap('viridis')
-
-    fig, ax = plt.subplots(figsize=(9, 6))
-    print('  z0    r(T,xHI)  r(T,rho)   (zero-lag values; only meaningful for --normalize coefficient)')
-    for z0, dist, npix, c in results:
-        r = np.arange(len(c['auto']))
-        sep = r * args.fov_deg / npix                                    # degrees
-        if args.xunits == 'cMpc':
-            sep = np.radians(sep) * dist
-        col = cmap(norm(z0))
-        ax.plot(sep, c['auto'], color=col, ls='-', alpha=0.6, lw=1.2)
-        ax.plot(sep, c['hi'], color=col, ls='--', alpha=0.6, lw=1.2)
-        ax.plot(sep, c['rho'], color=col, ls=':', alpha=0.6, lw=1.2)
-        ax.plot(sep, c['dhi'], color=col, ls='--', alpha=1.0, lw=1.2)
-        ax.plot(sep, c['drho'], color=col, ls=':', alpha=1.0, lw=1.2)
-        print(f'{z0:6.3f}  {c["hi"][0]:+8.3f}  {c["rho"][0]:+8.3f}')
-    ax.axhline(0, color='k', lw=0.5)
-    ax.set_xlabel('separation [degrees]' if args.xunits == 'deg' else 'comoving separation [cMpc]')
-    ax.set_ylabel('correlation coefficient' if args.normalize == 'coefficient' else 'correlation / zero-lag value')
+    ylabel = 'correlation coefficient' if args.normalize == 'coefficient' else 'correlation / zero-lag value'
     tag = f'$\\mathcal{{T}}_{{\\rm {args.band}}}$'
     scale = f' $\\times${args.diff_scale:g}' if args.diff_scale != 1 else ''
-    handles = [Line2D([], [], color='gray', ls='-', alpha=0.6, label=f'{tag} autocorrelation'),
-               Line2D([], [], color='gray', ls='--', alpha=0.6, label=f'{tag} $\\times$ $x_{{\\rm HI}}$'),
-               Line2D([], [], color='gray', ls=':', alpha=0.6, label=f'{tag} $\\times$ density'),
-               Line2D([], [], color='gray', ls='--', alpha=1.0, label=f'($x_{{\\rm HI}}$ xcorr) $-$ autocorr{scale}'),
-               Line2D([], [], color='gray', ls=':', alpha=1.0, label=f'(density xcorr) $-$ autocorr{scale}')]
-    ax.legend(handles=handles, fontsize=8, loc='best')
-    fig.colorbar(ScalarMappable(norm=norm, cmap=cmap), ax=ax, label=r'source redshift $z_0$')
+
+    # (curve key, difference key, line style, name used in labels)
+    panels = [('hii', 'dhii', '--', r'$x_{\rm HII}$'), ('rho', 'drho', ':', 'density')]
+    fig, axes = plt.subplots(1, 2, figsize=(13, 5.6), sharex=True, sharey=True)   # same scale in both panels
+    print('  z0    r(T,xHII)  r(T,rho)   (zero-lag values; only meaningful for --normalize coefficient)')
+    for ax, (key, dkey, ls, name) in zip(axes, panels):
+        for z0, dist, npix, c in results:
+            sep = np.arange(len(c['auto'])) * args.fov_deg / npix                   # degrees
+            if args.xunits == 'cMpc':
+                sep = np.radians(sep) * dist
+            col = cmap(norm(z0))
+            ax.plot(sep, c['auto'], color=col, ls='-', alpha=0.6, lw=1.2)
+            ax.plot(sep, c[key], color=col, ls=ls, alpha=0.6, lw=1.2)
+            ax.plot(sep, c[dkey], color=col, ls=ls, alpha=1.0, lw=1.2)
+        ax.axhline(0, color='k', lw=0.5)
+        ax.set_title(f'{tag} with {name}')
+        ax.set_xlabel('separation [degrees]' if args.xunits == 'deg' else 'comoving separation [cMpc]')
+        ax.legend(handles=[Line2D([], [], color='gray', ls='-', alpha=0.6, label=f'{tag} autocorrelation'),
+                           Line2D([], [], color='gray', ls=ls, alpha=0.6, label=f'{tag} $\\times$ {name}'),
+                           Line2D([], [], color='gray', ls=ls, alpha=1.0, label=f'({name} xcorr) $-$ autocorr{scale}')],
+                  fontsize=8, loc='best')
+    axes[0].set_ylabel(ylabel)
+    for z0, dist, npix, c in results:
+        print(f'{z0:6.3f}  {c["hii"][0]:+8.3f}  {c["rho"][0]:+8.3f}')
+    fig.colorbar(ScalarMappable(norm=norm, cmap=cmap), ax=axes.ravel().tolist(), label=r'source redshift $z_0$')
     fig.savefig(args.output, dpi=200, bbox_inches='tight')
     print(f'Wrote {args.output} ({len(results)} redshifts)')
 
