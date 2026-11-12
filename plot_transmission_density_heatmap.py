@@ -2,7 +2,7 @@
 
 For every pixel of the map, take the band transmission T (default: red) and the gas density at the same pixel
 in the SOURCE PLANE (the depth cell that contains the source, recorded in the output files as SourceCell). The
-pixels are counted in a 2-D histogram (x = transmission, y = density; see --density for the variable)
+pixels are counted in a 2-D histogram (x = transmission, y = log10 of the density over the slice's mean density)
 and coloured by the fraction of pixels in each cell on a logarithmic scale. All panels share the same bins,
 axis ranges and colour scale, so redshifts are directly comparable.
 
@@ -10,14 +10,6 @@ Transmission axis (--tscale): linear 0-1 for the red and ultrared bands, log10 T
 bluer bands (as plot_T_maps.py does); override with --tscale linear|log. In log mode, pixels below the lower
 limit are counted in the first bin. The density range is the pooled --dens-percentiles of all panels
 (or --dens-range); pixels outside it are not drawn and their fraction is printed.
-
-Density variable (--density):
-    log-overdensity (default)  log10(rho / <rho>), <rho> = mean of the source-plane slice: compresses the heavy
-                               tail and removes the overall evolution with redshift, so panels are comparable
-    overdensity                rho / <rho>
-    log-raw                    log10(rho) in the file's code units
-    raw                        rho in the file's code units (any scaling with redshift is left in, and with a
-                               linear axis the heavy tail stretches the range; --dens-range helps)
 
 Reads   MAPS_DIR/z0=<z>/tau_map_<z>_<suffix>.hdf5   (tau_band_avgs, full map or chunk files)
 and     --input (the lightcone file, for Density).
@@ -83,27 +75,8 @@ class SliceReader:
         return self.block[:, :, k - self.start].astype(np.float64)
 
 
-DENSITY_MODES = {
-    'log-overdensity': r'$\log_{10}(\rho/\langle\rho\rangle)$',
-    'overdensity': r'$\rho/\langle\rho\rangle$',
-    'log-raw': r'$\log_{10}\rho$ [code units]',
-    'raw': r'$\rho$ [code units]',
-}
-
-
-def transform_density(rho, mode):
-    """The chosen density variable for a slice; NaN where a logarithm is undefined (rho <= 0)."""
-    if mode == 'raw':
-        return rho.copy()
-    if mode == 'overdensity':
-        return rho / rho.mean()
-    base = rho / rho.mean() if mode == 'log-overdensity' else rho
-    with np.errstate(divide='ignore', invalid='ignore'):
-        return np.where(rho > 0, np.log10(base), np.nan)
-
-
-def load_pixels(maps_dir, input_path, band, only, mode='log-overdensity'):
-    """[(z0, tau_map, density-variable map)] sorted by redshift (NaN where a log is undefined)."""
+def load_pixels(maps_dir, input_path, band, only):
+    """[(z0, tau_map, log10_overdensity_map or None where density <= 0)] sorted by redshift."""
     entries = []
     for folder in z0_folders(maps_dir):
         files = open_map_files(folder)
@@ -124,7 +97,9 @@ def load_pixels(maps_dir, input_path, band, only, mode='log-overdensity'):
             rho = dens[cell]
             if rho.shape != tau.shape:
                 raise ValueError(f'Map is {tau.shape} but the density slice is {rho.shape}')
-            out.append((z0, tau, transform_density(rho, mode)))
+            with np.errstate(divide='ignore'):
+                y = np.where(rho > 0, np.log10(rho / rho.mean()), np.nan)
+            out.append((z0, tau, y))
     out.sort(key=lambda e: e[0])
     return out
 
@@ -139,17 +114,15 @@ def main():
     p.add_argument('--tscale', choices=['auto', 'linear', 'log'], default='auto')
     p.add_argument('--tmin-exp', type=float, default=-10.0, help='lowest log10(T) bin edge in log mode')
     p.add_argument('--bins', type=int, default=60, help='bins along each axis')
-    p.add_argument('--density', choices=list(DENSITY_MODES), default='log-overdensity',
-                   help='density variable on the y axis (default log-overdensity)')
     p.add_argument('--dens-percentiles', type=float, nargs=2, default=[0.01, 99.99], metavar=('LO', 'HI'))
     p.add_argument('--dens-range', type=float, nargs=2, default=None, metavar=('LO', 'HI'),
-                   help='explicit range of the chosen density variable instead of the percentiles')
+                   help='explicit log10(rho/<rho>) range instead of the percentiles')
     p.add_argument('--cmap', default='viridis')
     args = p.parse_args()
 
     band = BANDS[args.band]
     log_t = args.tscale == 'log' or (args.tscale == 'auto' and band < 3)
-    data = load_pixels(os.path.abspath(args.maps_dir), args.input, band, args.redshifts, args.density)
+    data = load_pixels(os.path.abspath(args.maps_dir), args.input, band, args.redshifts)
 
     pooled = np.concatenate([y[np.isfinite(y)] for _, _, y in data])
     ylo, yhi = args.dens_range if args.dens_range else np.percentile(pooled, args.dens_percentiles)
@@ -166,7 +139,7 @@ def main():
         ok = np.isfinite(y)
         counts, _, _ = np.histogram2d(x[ok], y[ok], bins=[xe, ye])
         fracs.append(counts / ok.sum())
-        print(f'z0={z0:.3f}: {ok.sum()} pixels with a defined density; {1 - counts.sum() / ok.sum():.2%} outside the '
+        print(f'z0={z0:.3f}: {ok.sum()} pixels with density > 0; {1 - counts.sum() / ok.sum():.2%} outside the '
               f'density range')
     vmax = max(f.max() for f in fracs)
     vmin = min(f[f > 0].min() for f in fracs)
@@ -187,7 +160,7 @@ def main():
     for ax in axes[-1]:
         ax.set_xlabel(xlabel)
     for ax in axes[:, 0]:
-        ax.set_ylabel(DENSITY_MODES[args.density])
+        ax.set_ylabel(r'$\log_{10}(\rho/\langle\rho\rangle)$')
     fig.colorbar(mesh, ax=axes.ravel().tolist(), label='fraction of pixels')
     fig.savefig(args.output, dpi=200, bbox_inches='tight')
     print(f'Wrote {args.output} ({n} redshifts)')
