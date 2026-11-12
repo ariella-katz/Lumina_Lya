@@ -115,6 +115,8 @@ def main():
     ax.set_ylabel(r'source redshift $z_0$')
     fig.colorbar(mesh, ax=ax, label=r'map-averaged transmission $\langle\mathcal{T}\rangle$')
     fig.savefig(args.output, dpi=200, bbox_inches='tight')
+
+    fig, ax = plt.subplots(figsize=(8, 5.5))
     print(f'Wrote {args.output} ({len(records)} redshifts x {len(dv)} frequencies)')
 
 
